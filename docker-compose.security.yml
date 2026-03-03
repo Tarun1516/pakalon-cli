@@ -1,0 +1,117 @@
+# Docker Compose for Phase 4 Security Testing Tools
+# Run with: docker-compose -f docker-compose-security.yml up -d
+# Or run specific tools: docker-compose -f docker-compose-security.yml up semgrep
+
+services:
+  # Semgrep - Static Application Security Testing
+  semgrep:
+    image: returntocorp/semgrep:latest
+    container_name: pakalon-semgrep
+    volumes:
+      - ./:/src
+    working_dir: /src
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "semgrep --config=auto --json --output=/src/.pakalon/semgrep-results.json ."
+    profiles:
+      - sast
+      - full
+
+  # Gitleaks - Secrets Detection
+  gitleaks:
+    image: zricethezav/gitleaks:latest
+    container_name: pakalon-gitleaks
+    volumes:
+      - ./:/src
+    working_dir: /src
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "gitleaks detect --source=. --report-format=json --report-path=/src/.pakalon/gitleaks-results.json"
+    profiles:
+      - sast
+      - full
+
+  # OWASP ZAP - Dynamic Application Security Testing
+  zap:
+    image: owasp/zap2docker-stable:latest
+    container_name: pakalon-zap
+    volumes:
+      - ./:/src
+    working_dir: /src
+    entrypoint: ["zap-baseline.py"]
+    command:
+      - "-t"
+      - "http://localhost:3000"
+      - "-J"
+      - "json"
+      - "-o"
+      - ".pakalon/zap-results.json"
+    profiles:
+      - dast
+      - full
+
+  # Nikto - Web Server Scanner
+  nikto:
+    image: threatbox/nikto:latest
+    container_name: pakalon-nikto
+    volumes:
+      - ./:/src
+    working_dir: /src
+    entrypoint: ["nikto"]
+    command:
+      - "-h"
+      - "localhost"
+      - "-Format"
+      - "json"
+      - "-output"
+      - ".pakalon/nikto-results.json"
+    profiles:
+      - dast
+      - full
+
+  # Nmap - Network Scanner
+  nmap:
+    image: instrumentisto/nmap:latest
+    container_name: pakalon-nmap
+    volumes:
+      - ./:/src
+    working_dir: /src
+    entrypoint: ["nmap"]
+    command:
+      - "-sV"
+      - "-oX"
+      - "/src/.pakalon/nmap-results.xml"
+      - "localhost"
+    profiles:
+      - dast
+      - full
+
+  # Bandit - Python Security Checker
+  bandit:
+    image: python:3.12-slim
+    container_name: pakalon-bandit
+    volumes:
+      - ./:/src
+    working_dir: /src
+    entrypoint: ["sh", "-c"]
+    command:
+      - "pip install bandit -q && bandit -r . -f json -o .pakalon/bandit-results.json"
+    profiles:
+      - sast
+
+  # Security Headers Checker (custom)
+  security-headers:
+    image: python:3.12-slim
+    container_name: pakalon-security-headers
+    volumes:
+      - ./:/src
+    working_dir: /src
+    entrypoint: ["sh", "-c"]
+    command:
+      - "pip install requests -q && python /src/.pakalon/scripts/check_security_headers.py"
+    profiles:
+      - dast
+
+networks:
+  default:
+    name: pakalon-security

@@ -1,0 +1,237 @@
+# Docker Compose for Phase 4 Security Tools (SAST/DAST)
+# Run with: docker-compose -f docker-compose-security.yml up -d
+#
+# This provides containerized security scanning tools for Phase 4:
+# - semgrep: Static Application Security Testing
+# - gitleaks: Secrets detection
+# - findsecbugs: Java security scanning
+# - brakeman: Ruby/Rails security scanning
+# - owasp/zap2docker: Dynamic Application Security Testing
+# - nikto: Web server scanning
+# - nmap: Network discovery and security scanning
+# - sqlmap: SQL injection testing
+# - wapiti: Web vulnerability scanner
+# - xsstrike: XSS vulnerability scanner
+
+services:
+  # Semgrep - Static Application Security Testing
+  semgrep:
+    image: returntocorp/semgrep:latest
+    container_name: pakalon-semgrep
+    volumes:
+      - ${PROJECT_DIR:-.}:/src
+    working_dir: /src
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "semgrep --config=auto --json --output=/src/.pakalon/semgrep-results.json . || true"
+    profiles:
+      - sast
+      - security
+
+  # Gitleaks - Secrets Detection
+  gitleaks:
+    image: zricethezav/gitleaks:latest
+    container_name: pakalon-gitleaks
+    volumes:
+      - ${PROJECT_DIR:-.}:/src
+    working_dir: /src
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "gitleaks detect --source=. --report-format=json --report-path=/src/.pakalon/gitleaks-results.json || true"
+    profiles:
+      - sast
+      - security
+
+  # FindSecBugs - Java Security Scanner
+  findsecbugs:
+    image: flowsec/findsecbugs:latest
+    container_name: pakalon-findsecbugs
+    volumes:
+      - ${PROJECT_DIR:-.}:/src
+    working_dir: /src
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "findsecbugs -progress /src -low -output /src/.pakalon/findsecbugs-results.xml || true"
+    profiles:
+      - sast
+      - security
+
+  # Brakeman - Ruby/Rails Security Scanner
+  brakeman:
+    image: presidentbeef/brakeman:latest
+    container_name: pakalon-brakeman
+    volumes:
+      - ${PROJECT_DIR:-.}:/code
+    working_dir: /code
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "brakeman --path /code -f json -o /code/.pakalon/brakeman-results.json || true"
+    profiles:
+      - sast
+      - security
+
+  # OWASP ZAP - Dynamic Application Security Testing
+  owasp-zap:
+    image: owasp/zap2docker-stable:latest
+    container_name: pakalon-owasp-zap
+    volumes:
+      - ${PROJECT_DIR:-.}:/src
+    working_dir: /src
+    entrypoint: []
+    command:
+      - zap-baseline.py
+      - -t
+      - "http://localhost:3000"
+      - -J
+      - zap-results.json
+      - -r
+      - zap-report.html
+    profiles:
+      - dast
+      - security
+    environment:
+      - JAVA_OPTS=-Xmx512m
+
+  # Nikto - Web Server Scanner
+  nikto:
+    image: suricata/nikto:latest
+    container_name: pakalon-nikto
+    volumes:
+      - ${PROJECT_DIR:-.}:/src
+    working_dir: /src
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "nikto -h localhost -o /src/.pakalon/nikto-results.xml -Format xml || true"
+    profiles:
+      - dast
+      - security
+
+  # Nmap - Network Discovery
+  nmap:
+    image: instrumentisto/nmap:latest
+    container_name: pakalon-nmap
+    volumes:
+      - ${PROJECT_DIR:-.}:/src
+    working_dir: /src
+    network_mode: host
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "nmap -sV -oX /src/.pakalon/nmap-results.xml localhost || true"
+    profiles:
+      - dast
+      - security
+
+  # SQLMap - SQL Injection Testing
+  sqlmap:
+    image: paoloo/sqlmap:latest
+    container_name: pakalon-sqlmap
+    volumes:
+      - ${PROJECT_DIR:-.}:/src
+    working_dir: /src
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "sqlmap -u http://localhost:3000 --batch --risk=2 --level=5 --output-dir=/src/.pakalon/sqlmap-results || true"
+    profiles:
+      - dast
+      - security
+
+  # Wapiti - Web Application Vulnerability Scanner
+  wapiti:
+    image: wapiti/wapiti:latest
+    container_name: pakalon-wapiti
+    volumes:
+      - ${PROJECT_DIR:-.}:/src
+    working_dir: /src
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "wapiti -u http://localhost:3000 -o /src/.pakalon/wapiti-results --format html || true"
+    profiles:
+      - dast
+      - security
+
+  # XSStrike - XSS Vulnerability Scanner
+  xsstrike:
+    image: menkrep1337/xsstrike:latest
+    container_name: pakalon-xsstrike
+    volumes:
+      - ${PROJECT_DIR:-.}:/src
+    working_dir: /src
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "python xsstrike.py -u http://localhost:3000 --output /src/.pakalon/xsstrike-results.json || true"
+    profiles:
+      - dast
+      - security
+
+  # SQLMap - SQL Injection Testing
+  sqlmap:
+    image: paoloo/sqlmap:latest
+    container_name: pakalon-sqlmap
+    volumes:
+      - ${PROJECT_DIR:-.}:/src
+    working_dir: /src
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "sqlmap -u http://localhost:3000 --batch --flush-session --output-dir=/src/.pakalon/sqlmap/ || true"
+    profiles:
+      - dast
+      - security
+
+  # Wapiti - Web Vulnerability Scanner
+  wapiti:
+    image: wapiti/wapiti:latest
+    container_name: pakalon-wapiti
+    volumes:
+      - ${PROJECT_DIR:-.}:/src
+    working_dir: /src
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "wapiti -u http://localhost:3000 -f json -o /src/.pakalon/wapiti-results.json || true"
+    profiles:
+      - dast
+      - security
+
+  # XSStrike - XSS Vulnerability Scanner
+  xsstrike:
+    image: menkrep1337/xsstrike:latest
+    container_name: pakalon-xsstrike
+    volumes:
+      - ${PROJECT_DIR:-.}:/src
+    working_dir: /src
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "python xsstrike.py -u http://localhost:3000 --json --output /src/.pakalon/xsstrike-results.json || true"
+    profiles:
+      - dast
+      - security
+
+  # Bandit - Python Security Linter (no Docker needed, runs locally)
+  # Run directly: docker run --rm -v $(pwd):/src -w /src pyupio/bandit -r .
+
+  # Security Tools Runner - Orchestrates all tools
+  security-runner:
+    image: python:3.12-slim
+    container_name: pakalon-security-runner
+    volumes:
+      - ${PROJECT_DIR:-.}:/src
+    working_dir: /src
+    environment:
+      - PROJECT_DIR=/src
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Pakalon Security Scanner"
+        echo "========================"
+        echo ""
+        echo "Available profiles:"
+        echo "  docker-compose -f docker-compose-security.yml --profile sast up     # Run SAST tools"
+        echo "  docker-compose -f docker-compose-security.yml --profile dast up     # Run DAST tools"
+        echo "  docker-compose -f docker-compose-security.yml --profile security up # Run all"
+        echo ""
+        echo "Results will be saved to .pakalon/ directory"
+    profiles:
+      - runner
+
+networks:
+  default:
+    name: pakalon-security

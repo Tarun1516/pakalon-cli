@@ -1,0 +1,1483 @@
+{
+  "version": "1.0.0",
+  "name": "Untitled Project",
+  "description": "",
+  "metadata": {
+    "exportedAt": "2026-02-18T07:25:42.591Z",
+    "exportVersion": "1.0.0",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+  },
+  "canvas": {
+    "width": 125,
+    "height": 27,
+    "canvasBackgroundColor": "#000000",
+    "showGrid": true
+  },
+  "animation": {
+    "frames": [
+      {
+        "id": "frame-1771399366087-0.8443988502779132",
+        "name": "Frame 1771399366087",
+        "duration": 100,
+        "data": {
+          "33,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "34,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "35,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "36,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "37,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "38,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "39,10": {
+            "char": "╗",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "42,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "43,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "44,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "45,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "46,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "47,10": {
+            "char": "╗",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "49,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "50,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "51,10": {
+            "char": "╗",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "54,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "55,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "56,10": {
+            "char": "╗",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "58,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "59,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "60,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "61,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "62,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "63,10": {
+            "char": "╗",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "65,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "66,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "67,10": {
+            "char": "╗",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "74,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "75,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "76,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "77,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "78,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "79,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "80,10": {
+            "char": "╗",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "82,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "83,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "84,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "85,10": {
+            "char": "╗",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "89,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "90,10": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "91,10": {
+            "char": "╗",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "33,11": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "34,11": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "35,11": {
+            "char": "╔",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "36,11": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "37,11": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "38,11": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "39,11": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "40,11": {
+            "char": "╗",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "41,11": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "42,11": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "43,11": {
+            "char": "╔",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "44,11": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "45,11": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "46,11": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "47,11": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "48,11": {
+            "char": "╗",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "49,11": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "50,11": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "51,11": {
+            "char": "║",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "53,11": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "54,11": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "55,11": {
+            "char": "╔",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "56,11": {
+            "char": "╝",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "57,11": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "58,11": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "59,11": {
+            "char": "╔",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "60,11": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "61,11": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "62,11": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "63,11": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "64,11": {
+            "char": "╗",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "65,11": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "66,11": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "67,11": {
+            "char": "║",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "73,11": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "74,11": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "75,11": {
+            "char": "╔",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "76,11": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "77,11": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "78,11": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "79,11": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "80,11": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "81,11": {
+            "char": "╗",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "82,11": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "83,11": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "84,11": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "85,11": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "86,11": {
+            "char": "╗",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "89,11": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "90,11": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "91,11": {
+            "char": "║",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "33,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "34,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "35,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "36,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "37,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "38,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "39,12": {
+            "char": "╔",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "40,12": {
+            "char": "╝",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "41,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "42,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "43,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "44,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "45,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "46,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "47,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "48,12": {
+            "char": "║",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "49,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "50,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "51,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "52,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "53,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "54,12": {
+            "char": "╔",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "55,12": {
+            "char": "╝",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "57,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "58,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "59,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "60,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "61,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "62,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "63,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "64,12": {
+            "char": "║",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "65,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "66,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "67,12": {
+            "char": "║",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "73,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "74,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "75,12": {
+            "char": "║",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "79,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "80,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "81,12": {
+            "char": "║",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "82,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "83,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "84,12": {
+            "char": "╔",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "85,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "86,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "87,12": {
+            "char": "╗",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "89,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "90,12": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "91,12": {
+            "char": "║",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "33,13": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "34,13": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "35,13": {
+            "char": "╔",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "36,13": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "37,13": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "38,13": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "39,13": {
+            "char": "╝",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "41,13": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "42,13": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "43,13": {
+            "char": "╔",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "44,13": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "45,13": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "46,13": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "47,13": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "48,13": {
+            "char": "║",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "49,13": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "50,13": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "51,13": {
+            "char": "╔",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "52,13": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "53,13": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "54,13": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "55,13": {
+            "char": "╗",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "57,13": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "58,13": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "59,13": {
+            "char": "╔",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "60,13": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "61,13": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "62,13": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "63,13": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "64,13": {
+            "char": "║",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "65,13": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "66,13": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "67,13": {
+            "char": "║",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "73,13": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "74,13": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "75,13": {
+            "char": "║",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "79,13": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "80,13": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "81,13": {
+            "char": "║",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "82,13": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "83,13": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "84,13": {
+            "char": "║",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "85,13": {
+            "char": "╚",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "86,13": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "87,13": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "88,13": {
+            "char": "╗",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "89,13": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "90,13": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "91,13": {
+            "char": "║",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "33,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "34,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "35,14": {
+            "char": "║",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "41,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "42,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "43,14": {
+            "char": "║",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "46,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "47,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "48,14": {
+            "char": "║",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "49,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "50,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "51,14": {
+            "char": "║",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "54,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "55,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "56,14": {
+            "char": "╗",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "57,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "58,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "59,14": {
+            "char": "║",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "62,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "63,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "64,14": {
+            "char": "║",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "65,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "66,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "67,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "68,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "69,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "70,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "71,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "72,14": {
+            "char": "╗",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "73,14": {
+            "char": "╚",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "74,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "75,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "76,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "77,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "78,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "79,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "80,14": {
+            "char": "╔",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "81,14": {
+            "char": "╝",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "82,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "83,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "84,14": {
+            "char": "║",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "86,14": {
+            "char": "╚",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "87,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "88,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "89,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "90,14": {
+            "char": "█",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "91,14": {
+            "char": "║",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "33,15": {
+            "char": "╚",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "34,15": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "35,15": {
+            "char": "╝",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "41,15": {
+            "char": "╚",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "42,15": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "43,15": {
+            "char": "╝",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "46,15": {
+            "char": "╚",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "47,15": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "48,15": {
+            "char": "╝",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "49,15": {
+            "char": "╚",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "50,15": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "51,15": {
+            "char": "╝",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "54,15": {
+            "char": "╚",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "55,15": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "56,15": {
+            "char": "╝",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "57,15": {
+            "char": "╚",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "58,15": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "59,15": {
+            "char": "╝",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "62,15": {
+            "char": "╚",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "63,15": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "64,15": {
+            "char": "╝",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "65,15": {
+            "char": "╚",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "66,15": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "67,15": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "68,15": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "69,15": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "70,15": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "71,15": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "72,15": {
+            "char": "╝",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "74,15": {
+            "char": "╚",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "75,15": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "76,15": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "77,15": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "78,15": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "79,15": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "80,15": {
+            "char": "╝",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "82,15": {
+            "char": "╚",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "83,15": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "84,15": {
+            "char": "╝",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "87,15": {
+            "char": "╚",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "88,15": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "89,15": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "90,15": {
+            "char": "═",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          },
+          "91,15": {
+            "char": "╝",
+            "color": "#FFFFFF",
+            "bgColor": "transparent"
+          }
+        }
+      }
+    ],
+    "currentFrameIndex": 0,
+    "frameRate": 12,
+    "looping": false
+  },
+  "tools": {
+    "activeTool": "pencil",
+    "selectedCharacter": "@",
+    "selectedColor": "#FFFFFF",
+    "selectedBgColor": "transparent",
+    "paintBucketContiguous": true,
+    "rectangleFilled": false
+  },
+  "ui": {
+    "theme": "dark",
+    "zoom": 1.2,
+    "panOffset": {
+      "x": 0,
+      "y": 0
+    },
+    "fontMetrics": {
+      "characterWidth": 7.8,
+      "characterHeight": 13,
+      "aspectRatio": 0.6,
+      "fontSize": 13,
+      "fontFamily": "SF Mono, Monaco, Cascadia Code, Consolas, JetBrains Mono, Fira Code, Monaspace Neon, Geist Mono, Courier New, monospace"
+    }
+  },
+  "typography": {
+    "fontSize": 13,
+    "characterSpacing": 1,
+    "lineSpacing": 1,
+    "selectedFontId": "auto"
+  },
+  "palettes": {
+    "activePaletteId": "ansi-16",
+    "customPalettes": [],
+    "recentColors": [
+      "#ff6b00"
+    ]
+  },
+  "characterPalettes": {
+    "activePaletteId": "minimal-ascii",
+    "customPalettes": [],
+    "mappingMethod": "brightness",
+    "invertDensity": false,
+    "characterSpacing": 1
+  }
+}
