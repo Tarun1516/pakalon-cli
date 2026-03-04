@@ -49,7 +49,8 @@ export async function requestDeviceCode(): Promise<DeviceCodeResult> {
   });
 
   const { device_id, code, expires_in } = response.data;
-  const loginUrl = `https://pakalon.com/login?code=${code}&device=${device_id}`;
+  const webBaseUrl = process.env.PAKALON_WEB_URL ?? "http://localhost:3000";
+  const loginUrl = `${webBaseUrl}/${device_id}/auth`;
 
   return {
     deviceId: device_id,

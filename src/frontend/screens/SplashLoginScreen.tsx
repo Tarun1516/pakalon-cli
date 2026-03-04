@@ -13,7 +13,7 @@
  * without the video animation (showAnimation=false).
  */
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { Box, Text } from "ink";
+import { Box, Text, Static } from "ink";
 import Spinner from "@/components/ui/Spinner.js";
 import {
   requestDeviceCode,
@@ -23,14 +23,8 @@ import {
 import { useAuth } from "@/store/index.js";
 import type { StoredCredentials } from "@/auth/storage.js";
 
-import LogoAnimatedImport from "@/frontend/animations/LogoAnimated.js";
-
-// Lazy-load the video animation to avoid crashing if asset is unavailable
-const LogoAnimatedComponent: React.ComponentType<{
-  loop?: boolean;
-  hasDarkBackground?: boolean;
-  onFinished?: () => void;
-}> | null = LogoAnimatedImport ?? null;
+import LogoAnimated from "@/frontend/animations/LogoAnimated.js";
+import TextLogoAnimation from "@/frontend/animations/TextLogoAnimation.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Big Code Display helpers
@@ -155,22 +149,19 @@ const SplashLoginScreen: React.FC<SplashLoginScreenProps> = ({
   // ─────────────────────────────────────────────────────────────────────────
   if (stage === "animation") {
     return (
-      <Box flexDirection="column" alignItems="center">
-        {LogoAnimatedComponent ? (
-          <LogoAnimatedComponent
-            hasDarkBackground
-            loop={false}
-            onFinished={handleAnimationDone}
-          />
-        ) : (
-          // Fallback: static title while code is fetching
-          <Box flexDirection="column" alignItems="center" padding={2}>
-            <Text color="cyan" bold>
-              {"██████╗  █████╗ ██╗  ██╗ █████╗ ██╗      ██████╗ ███╗   ██╗"}
-            </Text>
-            <Spinner label="Loading…" />
-          </Box>
-        )}
+      <Box
+        borderStyle="round"
+        borderColor="yellowBright"
+        flexDirection="column"
+        alignItems="center"
+        paddingX={2}
+        paddingY={1}
+      >
+        <LogoAnimated
+          hasDarkBackground
+          loop={false}
+          onFinished={handleAnimationDone}
+        />
         <Box marginTop={1}>
           <Spinner label={codeInfo ? "Ready — finishing animation…" : "Preparing login…"} />
         </Box>
@@ -183,74 +174,85 @@ const SplashLoginScreen: React.FC<SplashLoginScreenProps> = ({
   // ─────────────────────────────────────────────────────────────────────────
   if (stage === "waiting") {
     return (
-      <Box flexDirection="column" padding={1} gap={1}>
-        {/* Header */}
-        <Box flexDirection="column" alignItems="center" marginBottom={1}>
-          <Text color="cyan" bold>
-            {"██████╗  █████╗ ██╗  ██╗ █████╗ ██╗      ██████╗ ███╗   ██╗"}
-          </Text>
-          <Text color="cyan" bold>
-            {"██╔══██╗██╔══██╗██║ ██╔╝██╔══██╗██║     ██╔═══██╗████╗  ██║"}
-          </Text>
-          <Text color="cyan" bold>
-            {"██████╔╝███████║█████╔╝ ███████║██║     ██║   ██║██╔██╗ ██║"}
-          </Text>
-          <Text color="cyan" bold>
-            {"██╔═══╝ ██╔══██║██╔═██╗ ██╔══██║██║     ██║   ██║██║╚██╗██║"}
-          </Text>
-          <Text color="cyan" bold>
-            {"██║     ██║  ██║██║  ██╗██║  ██║███████╗╚██████╔╝██║ ╚████║"}
-          </Text>
-          <Text color="cyan" bold>
-            {"╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═╝  ╚═══╝"}
-          </Text>
-        </Box>
+      <>
+        {/*
+         * Static section: printed ONCE to stdout and never redrawn.
+         * This prevents the 125×27 logo from being cleared/reprinted on
+         * every Spinner tick, which was the root cause of terminal flickering.
+         */}
+        <Static items={[{ id: "logo" }]}>
+          {(item) => (
+            <Box
+              key={item.id}
+              borderStyle="round"
+              borderColor="yellowBright"
+              flexDirection="column"
+              alignItems="center"
+              paddingX={2}
+              paddingY={1}
+            >
+              {/* PAKALON text logo — whiteBright block characters */}
+              <TextLogoAnimation hasDarkBackground autoPlay={false} loop={false} />
+              <Text bold color="whiteBright">
+                Sign in to Pakalon
+              </Text>
+            </Box>
+          )}
+        </Static>
 
-        <Text bold color="white">
-          Sign in to Pakalon
-        </Text>
-
-        {/* Step 1 — Open the website */}
-        <Box flexDirection="column" gap={0}>
-          <Text>1. Open this URL in your browser:</Text>
-          <Box marginLeft={3}>
-            <Text color="blueBright" underline>
-              {codeInfo?.loginUrl ?? "https://pakalon.com/login"}
-            </Text>
-          </Box>
-        </Box>
-
-        {/* Step 2 — Show the 6-digit code */}
-        <Box flexDirection="column" gap={0}>
-          <Text>2. Log in or create an account, then enter this code:</Text>
+        {/*
+         * Dynamic section: updates on every Spinner tick (~100 ms).
+         * Only this small box is re-rendered, not the logo above.
+         */}
+        <Box
+          borderStyle="round"
+          borderColor="yellowBright"
+          flexDirection="column"
+          alignItems="center"
+          paddingX={2}
+          paddingY={1}
+          gap={1}
+        >
+          {/* 6-digit code */}
           {codeInfo ? (
             <BigCode code={codeInfo.code} />
           ) : (
-            <Box marginLeft={3}>
-              <Spinner label="Generating code…" />
+            <Spinner label="Generating code…" />
+          )}
+
+          {/* URL to open */}
+          <Box flexDirection="column" alignItems="center">
+            <Text>Open this link in your browser to authenticate:</Text>
+            <Box marginTop={1}>
+              <Text color="yellowBright" bold underline>
+                {codeInfo?.loginUrl ?? "Connecting…"}
+              </Text>
             </Box>
+            <Box marginTop={1}>
+              <Text dimColor>Log in or create an account, then enter the code above.</Text>
+            </Box>
+          </Box>
+
+          {/* Polling status */}
+          <Box marginTop={1}>
+            {codeInfo ? (
+              <Spinner
+                label={`Waiting for confirmation… (${pollAttempt * 3}s elapsed)`}
+              />
+            ) : (
+              <Spinner label="Connecting to Pakalon servers…" />
+            )}
+          </Box>
+
+          {/* Expiry hint */}
+          {codeInfo && (
+            <Text dimColor>
+              Code expires in {Math.floor(codeInfo.expiresIn / 60)} minute
+              {codeInfo.expiresIn >= 120 ? "s" : ""}. Press Ctrl+C to cancel.
+            </Text>
           )}
         </Box>
-
-        {/* Polling status */}
-        <Box marginTop={1}>
-          {codeInfo ? (
-            <Spinner
-              label={`Waiting for confirmation… (${pollAttempt * 3}s elapsed)`}
-            />
-          ) : (
-            <Spinner label="Connecting to Pakalon servers…" />
-          )}
-        </Box>
-
-        {/* Expiry hint */}
-        {codeInfo && (
-          <Text dimColor>
-            Code expires in {Math.floor(codeInfo.expiresIn / 60)} minute
-            {codeInfo.expiresIn >= 120 ? "s" : ""}. Press Ctrl+C to cancel.
-          </Text>
-        )}
-      </Box>
+      </>
     );
   }
 
@@ -259,7 +261,15 @@ const SplashLoginScreen: React.FC<SplashLoginScreenProps> = ({
   // ─────────────────────────────────────────────────────────────────────────
   if (stage === "approved") {
     return (
-      <Box flexDirection="column" padding={1} alignItems="center" gap={1}>
+      <Box
+        borderStyle="round"
+        borderColor="greenBright"
+        flexDirection="column"
+        alignItems="center"
+        paddingX={4}
+        paddingY={1}
+        gap={1}
+      >
         <Text color="greenBright" bold>
           ✓  Authenticated successfully!
         </Text>
@@ -272,7 +282,14 @@ const SplashLoginScreen: React.FC<SplashLoginScreenProps> = ({
   // Render: Error
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <Box flexDirection="column" padding={1} gap={1}>
+    <Box
+      borderStyle="round"
+      borderColor="red"
+      flexDirection="column"
+      paddingX={2}
+      paddingY={1}
+      gap={1}
+    >
       <Text color="red" bold>✗  Authentication failed</Text>
       <Text color="red">{error}</Text>
       <Text dimColor>Run `pakalon` again to retry.</Text>

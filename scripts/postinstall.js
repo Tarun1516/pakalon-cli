@@ -84,11 +84,12 @@ const pipCmd = fs.existsSync(venvPip) ? venvPip : "pip";
 // ── Install requirements ─────────────────────────────────────────────────────
 console.log("[pakalon] Installing Python dependencies (python/requirements.txt) …");
 
-// First attempt: bulk install with --prefer-binary (skips C++ compilation if wheels exist)
+// First attempt: bulk install with --prefer-binary (skips C++ compilation if wheels exist).
+// Use stdio:"pipe" to suppress compiler noise — we print our own status messages.
 const installResult = spawnSync(
   pipCmd,
   ["install", "-r", REQUIREMENTS, "--quiet", "--disable-pip-version-check", "--prefer-binary"],
-  { stdio: "inherit", encoding: "utf8" }
+  { stdio: "pipe", encoding: "utf8" }
 );
 
 if (installResult.status !== 0) {

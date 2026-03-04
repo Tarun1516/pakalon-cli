@@ -1,0 +1,2345 @@
+{
+  "version": "2.0.0",
+  "canvas": {
+    "width": 80,
+    "height": 24,
+    "canvasBackgroundColor": "#000000",
+    "showGrid": true
+  },
+  "timeline": {
+    "frameRate": 12,
+    "durationFrames": 1,
+    "looping": true
+  },
+  "layers": [
+    {
+      "id": "layer-1",
+      "name": "Layer 1",
+      "visible": true,
+      "solo": false,
+      "locked": false,
+      "opacity": 100,
+      "contentFrames": [
+        {
+          "id": "cf-1",
+          "name": "Frame 1",
+          "startFrame": 0,
+          "durationFrames": 1,
+          "data": {}
+        }
+      ],
+      "propertyTracks": [],
+      "staticProperties": {
+        "transform.anchorPoint.x": 40,
+        "transform.anchorPoint.y": 12
+      }
+    },
+    {
+      "id": "layer-2-mltrsu0g",
+      "name": "Mini-logo",
+      "visible": true,
+      "solo": false,
+      "locked": false,
+      "opacity": 100,
+      "contentFrames": [
+        {
+          "id": "cf-4-mltrsu0h",
+          "name": "Frame 1",
+          "startFrame": 0,
+          "durationFrames": 1,
+          "data": {
+            "39,0": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "40,0": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "29,1": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "30,1": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "31,1": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "39,1": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "40,1": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "48,1": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "49,1": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "50,1": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "29,2": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "30,2": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "31,2": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "32,2": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "39,2": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "40,2": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "47,2": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "48,2": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "49,2": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "50,2": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "30,3": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "31,3": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "32,3": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "33,3": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "39,3": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "40,3": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "46,3": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "47,3": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "48,3": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "49,3": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "31,4": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "32,4": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "33,4": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "39,4": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "40,4": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "46,4": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "47,4": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "48,4": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "22,5": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "23,5": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "32,5": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "33,5": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "34,5": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "39,5": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "40,5": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "45,5": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "46,5": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "47,5": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "56,5": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "57,5": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "58,5": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "22,6": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "23,6": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "24,6": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "25,6": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "26,6": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "33,6": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "34,6": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "35,6": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "39,6": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "40,6": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "44,6": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "45,6": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "46,6": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "53,6": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "54,6": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "55,6": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "56,6": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "57,6": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "24,7": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "25,7": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "26,7": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "27,7": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "28,7": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "33,7": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "34,7": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "35,7": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "36,7": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "39,7": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "40,7": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "43,7": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "44,7": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "45,7": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "46,7": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "51,7": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "52,7": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "53,7": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "54,7": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "55,7": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "26,8": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "27,8": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "28,8": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "29,8": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "30,8": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "34,8": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "35,8": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "36,8": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "38,8": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "39,8": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "40,8": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "41,8": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "42,8": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "43,8": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "44,8": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "45,8": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "49,8": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "50,8": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "51,8": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "52,8": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "53,8": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "28,9": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "29,9": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "30,9": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "31,9": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "32,9": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "35,9": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "36,9": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "37,9": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "38,9": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "39,9": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "40,9": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "41,9": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "42,9": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "43,9": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "44,9": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "47,9": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "48,9": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "49,9": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "50,9": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "51,9": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "30,10": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "31,10": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "32,10": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "33,10": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "34,10": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "35,10": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "36,10": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "37,10": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "38,10": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "39,10": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "40,10": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "41,10": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "42,10": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "43,10": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "44,10": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "45,10": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "46,10": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "47,10": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "48,10": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "49,10": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "19,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "20,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "21,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "22,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "23,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "24,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "25,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "26,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "33,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "34,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "35,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "36,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "37,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "38,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "39,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "40,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "41,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "42,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "43,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "44,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "45,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "46,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "53,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "54,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "55,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "56,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "57,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "58,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "59,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "60,11": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "19,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "20,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "21,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "22,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "23,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "24,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "25,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "26,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "27,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "28,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "29,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "30,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "31,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "32,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "33,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "34,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "35,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "36,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "37,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "38,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "39,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "40,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "41,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "42,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "43,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "44,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "45,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "46,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "47,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "48,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "49,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "50,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "51,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "52,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "53,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "54,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "55,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "56,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "57,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "58,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "59,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "60,12": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "27,13": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "28,13": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "29,13": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "30,13": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "31,13": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "32,13": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "33,13": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "34,13": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "35,13": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "36,13": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "37,13": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "38,13": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "39,13": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "40,13": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "41,13": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "42,13": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "43,13": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "44,13": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "45,13": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "46,13": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "47,13": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "48,13": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "49,13": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "50,13": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "51,13": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "52,13": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "20,15": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "36,15": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "37,15": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "38,15": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "39,15": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "40,15": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "41,15": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "42,15": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "43,15": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "59,15": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "20,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "21,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "22,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "23,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "24,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "25,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "26,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "27,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "28,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "29,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "30,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "31,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "32,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "33,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "34,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "35,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "36,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "37,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "38,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "39,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "40,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "41,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "42,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "43,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "44,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "45,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "46,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "47,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "48,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "49,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "50,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "51,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "52,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "53,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "54,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "55,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "56,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "57,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "58,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "59,16": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "21,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "22,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "23,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "24,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "25,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "26,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "27,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "28,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "29,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "30,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "31,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "32,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "33,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "34,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "35,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "43,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "44,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "45,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "46,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "47,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "48,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "49,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "50,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "51,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "52,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "53,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "54,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "55,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "56,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "57,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "58,17": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "33,19": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "34,19": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "35,19": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "36,19": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "37,19": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "38,19": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "39,19": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "40,19": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "41,19": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "42,19": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "43,19": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "44,19": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "45,19": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "46,19": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "27,20": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "28,20": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "29,20": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "30,20": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "31,20": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "32,20": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "33,20": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "34,20": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "35,20": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "36,20": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "37,20": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "43,20": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "44,20": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "45,20": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "46,20": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "47,20": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "48,20": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "49,20": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "50,20": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "51,20": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "52,20": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "35,22": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "36,22": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "37,22": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "38,22": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "39,22": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "40,22": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "41,22": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "42,22": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "43,22": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "44,22": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "35,23": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "36,23": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "37,23": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "38,23": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "39,23": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "40,23": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "41,23": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "42,23": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "43,23": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            },
+            "44,23": {
+              "char": "▓",
+              "color": "#faa307",
+              "bgColor": "transparent"
+            }
+          }
+        }
+      ],
+      "propertyTracks": [],
+      "staticProperties": {
+        "transform.anchorPoint.x": 40,
+        "transform.anchorPoint.y": 12
+      }
+    }
+  ],
+  "name": "Untitled Project",
+  "description": "",
+  "metadata": {
+    "exportedAt": "2026-02-19T18:04:26.743Z",
+    "exportVersion": "2.0.0",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
+  },
+  "tools": {
+    "activeTool": "eraser",
+    "selectedCharacter": "@",
+    "selectedColor": "#ff6400",
+    "selectedBgColor": "transparent",
+    "paintBucketContiguous": true,
+    "rectangleFilled": false
+  },
+  "ui": {
+    "theme": "dark",
+    "zoom": 1,
+    "panOffset": {
+      "x": 0,
+      "y": 0
+    },
+    "fontMetrics": {
+      "characterWidth": 10.799999999999999,
+      "characterHeight": 18,
+      "aspectRatio": 0.6,
+      "fontSize": 18,
+      "fontFamily": "SF Mono, Monaco, Cascadia Code, Consolas, JetBrains Mono, Fira Code, Monaspace Neon, Geist Mono, Courier New, monospace"
+    }
+  },
+  "typography": {
+    "fontSize": 18,
+    "characterSpacing": 1,
+    "lineSpacing": 1,
+    "selectedFontId": "auto"
+  },
+  "palettes": {
+    "activePaletteId": "palette_1771524120520_8h926d17b",
+    "customPalettes": [
+      {
+        "id": "palette_1771524120520_8h926d17b",
+        "name": "Material Design (Custom)",
+        "colors": [
+          {
+            "id": "color_1771524120520_gks96k8pz",
+            "value": "#FFEBEE",
+            "name": "Red 50"
+          },
+          {
+            "id": "color_1771524120520_kk92rk9bo",
+            "value": "#FFCDD2",
+            "name": "Red 100"
+          },
+          {
+            "id": "color_1771524120520_y7lrmynij",
+            "value": "#EF9A9A",
+            "name": "Red 200"
+          },
+          {
+            "id": "color_1771524120520_il4t8snva",
+            "value": "#E57373",
+            "name": "Red 300"
+          },
+          {
+            "id": "color_1771524120520_4j7vp0znm",
+            "value": "#EF5350",
+            "name": "Red 400"
+          },
+          {
+            "id": "color_1771524120520_pfa7iy2we",
+            "value": "#F44336",
+            "name": "Red 500"
+          },
+          {
+            "id": "color_1771524120520_803c5j3ex",
+            "value": "#E53935",
+            "name": "Red 600"
+          },
+          {
+            "id": "color_1771524120520_36ypbxtes",
+            "value": "#D32F2F",
+            "name": "Red 700"
+          },
+          {
+            "id": "color_1771524120520_lnahg8vic",
+            "value": "#C62828",
+            "name": "Red 800"
+          },
+          {
+            "id": "color_1771524120521_zvemkyc3z",
+            "value": "#B71C1C",
+            "name": "Red 900"
+          },
+          {
+            "id": "color_1771524120521_qpgapq2ha",
+            "value": "#FCE4EC",
+            "name": "Pink 50"
+          },
+          {
+            "id": "color_1771524120521_k5z1m2get",
+            "value": "#F8BBD9",
+            "name": "Pink 100"
+          },
+          {
+            "id": "color_1771524120521_zpewk6wlk",
+            "value": "#F48FB1",
+            "name": "Pink 200"
+          },
+          {
+            "id": "color_1771524120521_xtxf6jrvh",
+            "value": "#F06292",
+            "name": "Pink 300"
+          },
+          {
+            "id": "color_1771524120521_h69bmjn6v",
+            "value": "#EC407A",
+            "name": "Pink 400"
+          },
+          {
+            "id": "color_1771524120521_rzihrldpy",
+            "value": "#E91E63",
+            "name": "Pink 500"
+          },
+          {
+            "id": "color_1771524120521_0p8er4dlu",
+            "value": "#D81B60",
+            "name": "Pink 600"
+          },
+          {
+            "id": "color_1771524120521_5g5fy7sx5",
+            "value": "#C2185B",
+            "name": "Pink 700"
+          },
+          {
+            "id": "color_1771524120521_kldk03jbe",
+            "value": "#AD1457",
+            "name": "Pink 800"
+          },
+          {
+            "id": "color_1771524120521_92axrcm1m",
+            "value": "#880E4F",
+            "name": "Pink 900"
+          },
+          {
+            "id": "color_1771524120521_rfxsrtb9r",
+            "value": "#F3E5F5",
+            "name": "Purple 50"
+          },
+          {
+            "id": "color_1771524120521_cktgf8ih2",
+            "value": "#E1BEE7",
+            "name": "Purple 100"
+          },
+          {
+            "id": "color_1771524120521_u9rksbbyh",
+            "value": "#CE93D8",
+            "name": "Purple 200"
+          },
+          {
+            "id": "color_1771524120521_svgvomlst",
+            "value": "#BA68C8",
+            "name": "Purple 300"
+          },
+          {
+            "id": "color_1771524120521_deu6762x5",
+            "value": "#AB47BC",
+            "name": "Purple 400"
+          },
+          {
+            "id": "color_1771524120521_70sffng3p",
+            "value": "#9C27B0",
+            "name": "Purple 500"
+          },
+          {
+            "id": "color_1771524120521_ei20dy7nn",
+            "value": "#8E24AA",
+            "name": "Purple 600"
+          },
+          {
+            "id": "color_1771524120521_4z12j1d00",
+            "value": "#7B1FA2",
+            "name": "Purple 700"
+          },
+          {
+            "id": "color_1771524120521_diodv118d",
+            "value": "#6A1B9A",
+            "name": "Purple 800"
+          },
+          {
+            "id": "color_1771524120521_r9yjax7vl",
+            "value": "#4A148C",
+            "name": "Purple 900"
+          },
+          {
+            "id": "color_1771524120521_8n17eyitl",
+            "value": "#E3F2FD",
+            "name": "Blue 50"
+          },
+          {
+            "id": "color_1771524120521_f7dp4i0nq",
+            "value": "#BBDEFB",
+            "name": "Blue 100"
+          },
+          {
+            "id": "color_1771524120521_iqes6r3oh",
+            "value": "#90CAF9",
+            "name": "Blue 200"
+          },
+          {
+            "id": "color_1771524120521_l89eui220",
+            "value": "#64B5F6",
+            "name": "Blue 300"
+          },
+          {
+            "id": "color_1771524120521_jn47pu4ht",
+            "value": "#42A5F5",
+            "name": "Blue 400"
+          },
+          {
+            "id": "color_1771524120521_ujx022362",
+            "value": "#2196F3",
+            "name": "Blue 500"
+          },
+          {
+            "id": "color_1771524120521_8f59i4lcs",
+            "value": "#1E88E5",
+            "name": "Blue 600"
+          },
+          {
+            "id": "color_1771524120521_xcvu85vjr",
+            "value": "#1976D2",
+            "name": "Blue 700"
+          },
+          {
+            "id": "color_1771524120521_18v1oqnlj",
+            "value": "#1565C0",
+            "name": "Blue 800"
+          },
+          {
+            "id": "color_1771524120521_ckbuj88b5",
+            "value": "#0D47A1",
+            "name": "Blue 900"
+          },
+          {
+            "id": "color_1771524120521_m1jcfduii",
+            "value": "#E8F5E8",
+            "name": "Green 50"
+          },
+          {
+            "id": "color_1771524120521_jwzqn2v8g",
+            "value": "#C8E6C9",
+            "name": "Green 100"
+          },
+          {
+            "id": "color_1771524120521_wk1470r0w",
+            "value": "#A5D6A7",
+            "name": "Green 200"
+          },
+          {
+            "id": "color_1771524120521_1n7t70zsw",
+            "value": "#81C784",
+            "name": "Green 300"
+          },
+          {
+            "id": "color_1771524120521_pv9rky385",
+            "value": "#66BB6A",
+            "name": "Green 400"
+          },
+          {
+            "id": "color_1771524120521_5zluuz5p7",
+            "value": "#4CAF50",
+            "name": "Green 500"
+          },
+          {
+            "id": "color_1771524120521_2yqy9izd3",
+            "value": "#43A047",
+            "name": "Green 600"
+          },
+          {
+            "id": "color_1771524120521_eggi2cxee",
+            "value": "#388E3C",
+            "name": "Green 700"
+          },
+          {
+            "id": "color_1771524120521_8nndt0tps",
+            "value": "#2E7D32",
+            "name": "Green 800"
+          },
+          {
+            "id": "color_1771524120521_qd3sjt2eh",
+            "value": "#1B5E20",
+            "name": "Green 900"
+          },
+          {
+            "id": "color_1771524120521_5ks2uop68",
+            "value": "#FFF3E0",
+            "name": "Orange 50"
+          },
+          {
+            "id": "color_1771524120521_kmsu6jdsv",
+            "value": "#FFE0B2",
+            "name": "Orange 100"
+          },
+          {
+            "id": "color_1771524120521_cvyyzknel",
+            "value": "#FFCC80",
+            "name": "Orange 200"
+          },
+          {
+            "id": "color_1771524120521_wptrabydl",
+            "value": "#FFB74D",
+            "name": "Orange 300"
+          },
+          {
+            "id": "color_1771524120521_8d7ozcqwo",
+            "value": "#FFA726",
+            "name": "Orange 400"
+          },
+          {
+            "id": "color_1771524120521_8fx2nz5e1",
+            "value": "#FF9800",
+            "name": "Orange 500"
+          },
+          {
+            "id": "color_1771524120521_10y6pdn4x",
+            "value": "#FB8C00",
+            "name": "Orange 600"
+          },
+          {
+            "id": "color_1771524120521_x5rslf96j",
+            "value": "#F57C00",
+            "name": "Orange 700"
+          },
+          {
+            "id": "color_1771524120521_ki9yha9ha",
+            "value": "#E65100",
+            "name": "Orange 900"
+          },
+          {
+            "id": "color_1771524120521_7fqkqn4ek",
+            "value": "#ffffff"
+          },
+          {
+            "id": "color_1771524122425_9yngf8g23",
+            "value": "#ffffff"
+          },
+          {
+            "id": "color_1771524127361_9xgrk8x2w",
+            "value": "#ffffff"
+          }
+        ],
+        "isCustom": true,
+        "isPreset": false
+      }
+    ],
+    "recentColors": []
+  },
+  "characterPalettes": {
+    "activePaletteId": "block-characters",
+    "customPalettes": [],
+    "mappingMethod": "brightness",
+    "invertDensity": false,
+    "characterSpacing": 1
+  }
+}
