@@ -44,6 +44,21 @@ export function createApiClient(baseURL: string = DEFAULT_BASE_URL): AxiosInstan
       const detail =
         (err.response?.data as any)?.detail ?? err.message;
 
+      if (!err.response) {
+        const networkMessage = `${err.code ?? ""} ${detail}`.toLowerCase();
+        if (
+          networkMessage.includes("econnrefused") ||
+          networkMessage.includes("enotfound") ||
+          networkMessage.includes("etimedout") ||
+          networkMessage.includes("network error") ||
+          networkMessage.includes("socket hang up")
+        ) {
+          throw new Error(
+            `Could not connect to the Pakalon backend at ${baseURL}. Make sure the backend server is running and reachable.`
+          );
+        }
+      }
+
       if (status === 401) {
         throw new Error(`Authentication failed: ${detail}`);
       }

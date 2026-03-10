@@ -384,10 +384,10 @@ _Describe the problem this project solves_
 _Complete API documentation will be generated based on the plan and tasks._
 
 ## Base URL
-```
+\`\`\`
 Development: http://localhost:8000/api/v1
 Production: https://api.example.com/api/v1
-```
+\`\`\`
 `,
     },
     {
@@ -459,9 +459,10 @@ The Auditor agent scans the codebase against requirements.
 ## Status: PENDING
 
 ## Usage
-- `/auditor` - Run auditor
+- \`/auditor\` - Run auditor
 `,
     },
+  {
       path: path.join(base, "ai-agents", "phase-3", "subagent-1.md"),
       content: `# Phase 3 - Subagent 1: Frontend Development
 

@@ -12,20 +12,20 @@ import AgentScreen from "@/components/screens/AgentScreen.js";
 import { useAuth, useMode, useStore } from "@/store/index.js";
 import { loadCredentials } from "@/auth/storage.js";
 import { getApiClient } from "@/api/client.js";
-import { cmdResumeSession, cmdForkSession, cmdReplayUserMessages, cmdContinue } from "@/commands/session.js";
+import { cmdResumeSession, cmdForkSession, cmdReplayUserMessages, cmdContinue, cmdCreateSession } from "@/commands/session.js";
 import { resolveProjectConfig } from "@/utils/project-config.js";
 import logger from "@/utils/logger.js";
 import { checkStartupCredits } from "@/api/credits.js";
 import { buildMemoryBlock } from "@/utils/memory-file.js";
 import { cachePrContext, formatPrContextForPrompt } from "@/utils/github-pr.js";
-import { checkStartupCredits } from "@/api/credits.js";
+import type { LegacyPermissionMode, PermissionMode } from "@/store/slices/mode.slice.js";
 
 interface AppProps {
   initialMessage?: string;
   projectDir?: string;
   forceAgent?: boolean;
   showBanner?: boolean;
-  permissionMode?: "plan" | "edit" | "auto-accept" | "bypass";
+  permissionMode?: PermissionMode | LegacyPermissionMode;
   modelOverride?: string;
   defaultModel?: string;
   fallbackModel?: string;
@@ -94,9 +94,15 @@ const App: React.FC<AppProps> = ({
   const { isLoggedIn, restoreSession, hasEverLoggedIn } = useAuth();
   const { mode } = useMode();
   const setPermissionMode = useStore((s) => s.setPermissionMode);
+  const syncProfile = useStore((s) => s.syncProfile);
+  const sessionId = useStore((s) => s.sessionId);
   const pendingBridgeMode = useStore((s) => s.pendingBridgeMode);
+  const [isCreatingStartupSession, setIsCreatingStartupSession] = React.useState(false);
 
-  // Track whether login just completed this session (for logo animation)
+  // Was the user already logged in when the app started? (returning user → show text animation)
+  const [wasAlreadyLoggedIn] = React.useState(isLoggedIn);
+
+  // Track whether login just completed this session (fresh login → text animation after video)
   const [justLoggedIn, setJustLoggedIn] = React.useState(false);
   const prevLoggedIn = React.useRef(isLoggedIn);
   useEffect(() => {
@@ -232,6 +238,35 @@ const App: React.FC<AppProps> = ({
     }
   }, [restoreSession]);
 
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    let cancelled = false;
+
+    void getApiClient()
+      .get<{
+        plan: "free" | "pro" | "enterprise";
+        github_login: string | null;
+        display_name: string | null;
+        trial_days_remaining: number | null;
+      }>("/auth/me")
+      .then(({ data }) => {
+        if (cancelled) return;
+        syncProfile({
+          plan: data.plan,
+          githubLogin: data.github_login,
+          displayName: data.display_name,
+          trialDaysRemaining: data.trial_days_remaining,
+        });
+      })
+      .catch((err) => {
+        logger.debug("Profile sync skipped", err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoggedIn, syncProfile]);
+
   // Resume specific session if --session-id flag was passed
   useEffect(() => {
     if (sessionIdOverride && isLoggedIn) {
@@ -249,6 +284,30 @@ const App: React.FC<AppProps> = ({
       });
     }
   }, [continueSession, isLoggedIn, sessionIdOverride]);
+
+  useEffect(() => {
+    if (!isLoggedIn || sessionId || sessionIdOverride || continueSession || forkSession) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsCreatingStartupSession(true);
+    void cmdCreateSession(undefined, "chat", projectDir)
+      .catch((err) => {
+        if (!cancelled) {
+          logger.warn("Failed to create startup session", err);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsCreatingStartupSession(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [continueSession, forkSession, isLoggedIn, projectDir, sessionId, sessionIdOverride]);
 
   // --file flag: read each specified file and store contents
   useEffect(() => {
@@ -439,7 +498,7 @@ const App: React.FC<AppProps> = ({
   if (!isLoggedIn) {
     return (
       <SplashLoginScreen
-        showAnimation={!hasEverLoggedIn}
+        showAnimation={false}
       />
     );
   }
@@ -448,7 +507,7 @@ const App: React.FC<AppProps> = ({
   if (creditsBlocked) {
     return (
       <Box flexDirection="column" padding={2}>
-        <Text color="red" bold>⛔ No credits remaining</Text>
+        <Text color="red" bold>No credits remaining</Text>
         <Box marginTop={1}>
           <Text>{creditsBlockedReason}</Text>
         </Box>
@@ -471,6 +530,15 @@ const App: React.FC<AppProps> = ({
     );
   }
 
+  if (isCreatingStartupSession && !sessionId) {
+    return (
+      <Box flexDirection="column" padding={1}>
+        <Text color="yellowBright">Preparing your session…</Text>
+        <Text dimColor>Creating a backend session id for this workspace.</Text>
+      </Box>
+    );
+  }
+
   return (
     <ChatLayout
       initialMessage={resolvedInitialMessage}
@@ -487,7 +555,7 @@ const App: React.FC<AppProps> = ({
       maxBudgetUsd={resolvedMaxBudget}
       disableSlashCommands={disableSlashCommands}
       systemPrompt={systemPrompt}
-      playLogoAnimation={justLoggedIn}
+      playLogoAnimation={justLoggedIn || wasAlreadyLoggedIn}
       memoryBlock={memoryBlock}
     />
   );

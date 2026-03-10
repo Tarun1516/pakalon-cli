@@ -22,6 +22,14 @@ import {
   runPostBashHooks,
 } from "@/ai/hooks.js";
 
+function isInteractivePermissionMode(permissionMode: string): boolean {
+  return permissionMode === "normal";
+}
+
+function isToolingDisabled(permissionMode: string): boolean {
+  return permissionMode === "orchestration";
+}
+
 export const readFileTool = tool({
   description: "Read the content of a file from the filesystem",
   inputSchema: z.object({
@@ -30,6 +38,21 @@ export const readFileTool = tool({
   }),
   execute: async ({ filePath, maxBytes = 32768 }) => {
     try {
+      const { permissionMode } = useStore.getState();
+      if (isToolingDisabled(permissionMode)) {
+        return { error: "Read blocked: orchestration mode is Q&A only.", blocked: true, permissionMode };
+      }
+      if (isInteractivePermissionMode(permissionMode)) {
+        const absPath = path.resolve(filePath);
+        const allowed = await permissionGate.requestPermission(
+          "readFile",
+          `Read file: ${absPath}`,
+          { filePath: absPath, maxBytes },
+        );
+        if (!allowed) {
+          return { error: "Read declined by user.", blocked: true, permissionMode };
+        }
+      }
       const abs = path.resolve(filePath);
       const stat = fs.statSync(abs);
       if (stat.size > 1_000_000) {
@@ -54,9 +77,9 @@ export const writeFileTool = tool({
   execute: async ({ filePath, content, append = false }) => {
     // Block all writes in Plan mode — only read-only actions allowed
     const { permissionMode } = useStore.getState();
-    if (permissionMode === "plan") {
+    if (permissionMode === "plan" || isToolingDisabled(permissionMode)) {
       return {
-        error: "Write blocked: permission mode is 'plan'. Switch to 'edit' or 'auto-accept' to allow file writes.",
+        error: "Write blocked in the current mode. Switch to normal or auto-accept to allow file writes.",
         blocked: true,
         permissionMode,
       };
@@ -65,7 +88,7 @@ export const writeFileTool = tool({
     // Edit mode: ask human for permission before writing
     // Skip if user chose "accept all" this session
     const autoAccept = (globalThis as Record<string, unknown>).PAKALON_PERMISSION_AUTO_ACCEPT === true;
-    if (permissionMode === "edit" && !autoAccept) {
+    if (isInteractivePermissionMode(permissionMode) && !autoAccept) {
       const abs = path.resolve(filePath);
       const allowed = await permissionGate.requestPermission(
         "writeFile",
@@ -115,7 +138,7 @@ export const writeFileTool = tool({
           lspDiagnostics = diags.map((d) => ({
             severity: d.severity,
             message: d.message,
-            line: d.range?.start?.line != null ? d.range.start.line + 1 : undefined,
+            line: d.line != null ? d.line + 1 : undefined,
             source: d.source ?? undefined,
           }));
         }
@@ -143,6 +166,21 @@ export const listDirTool = tool({
   }),
   execute: async ({ dirPath, recursive = false }) => {
     try {
+      const { permissionMode } = useStore.getState();
+      if (isToolingDisabled(permissionMode)) {
+        return { error: "List blocked: orchestration mode is Q&A only.", blocked: true, permissionMode };
+      }
+      if (isInteractivePermissionMode(permissionMode)) {
+        const absPath = path.resolve(dirPath);
+        const allowed = await permissionGate.requestPermission(
+          "listDir",
+          `List directory: ${absPath}`,
+          { dirPath: absPath, recursive },
+        );
+        if (!allowed) {
+          return { error: "Directory listing declined by user.", blocked: true, permissionMode };
+        }
+      }
       const abs = path.resolve(dirPath);
       if (recursive) {
         const results: string[] = [];
@@ -178,10 +216,17 @@ export const bashTool = tool({
     // Block commands that modify the filesystem in Plan mode
     const { permissionMode } = useStore.getState();
     const writePatterns = /\b(rm|rmdir|mv|cp|mkdir|touch|chmod|chown|install|npm|yarn|pnpm|pip|apt|brew)\b|>>?|tee\b|curl\s.*-o\b|wget\b/;
-    if (permissionMode === "plan") {
+    if (permissionMode === "plan" || isToolingDisabled(permissionMode)) {
       if (writePatterns.test(command)) {
         return {
-          error: "Command blocked: permission mode is 'plan'. This command appears to modify files or install packages.",
+          error: "Command blocked in the current mode. This command appears to modify files or install packages.",
+          blocked: true,
+          permissionMode,
+        };
+      }
+      if (isToolingDisabled(permissionMode)) {
+        return {
+          error: "Command blocked: orchestration mode is Q&A only.",
           blocked: true,
           permissionMode,
         };
@@ -190,7 +235,7 @@ export const bashTool = tool({
 
     // Edit mode: ask human for permission if command looks destructive
     const autoAccept = (globalThis as Record<string, unknown>).PAKALON_PERMISSION_AUTO_ACCEPT === true;
-    if (permissionMode === "edit" && !autoAccept && writePatterns.test(command)) {
+    if (isInteractivePermissionMode(permissionMode) && !autoAccept) {
       const allowed = await permissionGate.requestPermission(
         "bash",
         `Execute command: ${command}`,
@@ -582,12 +627,12 @@ export const editFileTool = tool({
   }),
   execute: async ({ filePath, oldString, newString, allowMultiple = false }) => {
     const { permissionMode } = useStore.getState();
-    if (permissionMode === "plan") {
+    if (permissionMode === "plan" || isToolingDisabled(permissionMode)) {
       return { error: "Edit blocked: permission mode is 'plan'.", blocked: true };
     }
 
     const autoAccept = (globalThis as Record<string, unknown>).PAKALON_PERMISSION_AUTO_ACCEPT === true;
-    if (permissionMode === "edit" && !autoAccept) {
+    if (isInteractivePermissionMode(permissionMode) && !autoAccept) {
       const abs = path.resolve(filePath);
       const allowed = await permissionGate.requestPermission(
         "editFile",
@@ -630,7 +675,7 @@ export const editFileTool = tool({
           editDiagnostics = diags.map((d) => ({
             severity: d.severity,
             message: d.message,
-            line: d.range?.start?.line != null ? d.range.start.line + 1 : undefined,
+            line: d.line != null ? d.line + 1 : undefined,
             source: d.source ?? undefined,
           }));
         }
@@ -674,12 +719,12 @@ export const multiEditFilesTool = tool({
   }),
   execute: async ({ edits }) => {
     const { permissionMode } = useStore.getState();
-    if (permissionMode === "plan") {
+    if (permissionMode === "plan" || isToolingDisabled(permissionMode)) {
       return { error: "Multi-edit blocked: permission mode is 'plan'.", blocked: true };
     }
 
     const autoAccept = (globalThis as Record<string, unknown>).PAKALON_PERMISSION_AUTO_ACCEPT === true;
-    if (permissionMode === "edit" && !autoAccept) {
+    if (isInteractivePermissionMode(permissionMode) && !autoAccept) {
       const summary = edits.map((e) => path.basename(e.filePath)).join(", ");
       const allowed = await permissionGate.requestPermission(
         "multiEditFiles",

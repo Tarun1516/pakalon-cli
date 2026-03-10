@@ -2,15 +2,12 @@
  * SplashLoginScreen — shown when user has never logged in before.
  *
  * Flow:
- *   1. Play video animation (LogoAnimated) while silently fetching a device code
- *   2. Once animation completes (or times out), show the auth UI:
+ *   1. Fetch a device code as soon as the screen mounts
+ *   2. Render the ASCII text logo and auth UI immediately:
  *        • URL to visit on the website
- *        • 6-digit code displayed large and prominently
+ *        • 6-character code displayed large and prominently
  *        • Polling spinner
  *   3. On approval → call onAuthenticated()
- *
- * For subsequent logins (not first-ever), this screen is also shown but
- * without the video animation (showAnimation=false).
  */
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { Box, Text, Static } from "ink";
@@ -22,15 +19,13 @@ import {
 } from "@/auth/device-flow.js";
 import { useAuth } from "@/store/index.js";
 import type { StoredCredentials } from "@/auth/storage.js";
-
-import LogoAnimated from "@/frontend/animations/LogoAnimated.js";
-import TextLogoAnimation from "@/frontend/animations/TextLogoAnimation.js";
+import PakalonLogo from "@/frontend/components/PakalonLogo.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Big Code Display helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Render the 6-char device code as large block characters */
+/** Render the 6-character device code as large block characters */
 function BigCode({ code }: { code: string }) {
   return (
     <Box flexDirection="column" alignItems="center" marginY={1}>
@@ -56,16 +51,12 @@ function BigCode({ code }: { code: string }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 type Stage =
-  | "animation"   // showing video animation, fetching code in background
+  | "loading"     // fetching code and backend-selected launch experience
   | "waiting"     // showing URL + code, polling for approval
   | "approved"    // approved, logging in…
   | "error";
 
 interface SplashLoginScreenProps {
-  /**
-   * When true, play the video animation before showing the auth UI.
-   * Set to true on first-ever launch, false for subsequent logins.
-   */
   showAnimation?: boolean;
   onAuthenticated?: () => void;
 }
@@ -76,11 +67,14 @@ const SplashLoginScreen: React.FC<SplashLoginScreenProps> = ({
 }) => {
   const { login } = useAuth();
 
-  const [stage, setStage] = useState<Stage>(showAnimation ? "animation" : "waiting");
+  const [stage, setStage] = useState<Stage>("loading");
   const [codeInfo, setCodeInfo] = useState<DeviceCodeResult | null>(null);
   const [pollAttempt, setPollAttempt] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [browserHint, setBrowserHint] = useState<string | null>(null);
   const cancelledRef = useRef(false);
+  const openedBrowserRef = useRef(false);
+  const pollingStartedRef = useRef(false);
 
   // ── Fetch device code immediately (runs in background during animation) ──
   useEffect(() => {
@@ -92,6 +86,7 @@ const SplashLoginScreen: React.FC<SplashLoginScreenProps> = ({
         const result = await requestDeviceCode();
         if (cancelled || cancelledRef.current) return;
         setCodeInfo(result);
+        setStage("waiting");
       } catch (err: unknown) {
         if (cancelled || cancelledRef.current) return;
         setError((err as Error).message ?? "Failed to request device code");
@@ -105,14 +100,36 @@ const SplashLoginScreen: React.FC<SplashLoginScreenProps> = ({
     };
   }, []);
 
-  // ── Start polling once we have a code and we're in "waiting" stage ──
+  // ── Open the browser as soon as the login URL is ready ──
   useEffect(() => {
-    if (stage !== "waiting" || !codeInfo) return;
+    if (!codeInfo?.loginUrl || openedBrowserRef.current) return;
+    openedBrowserRef.current = true;
+
+    let cancelled = false;
+
+    void import("open")
+      .then(({ default: openUrl }) => openUrl(codeInfo.loginUrl, { wait: false }))
+      .catch(() => {
+        if (!cancelled) {
+          setBrowserHint("Couldn't open your browser automatically. Use the link below instead.");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [codeInfo?.loginUrl]);
+
+  // ── Start polling as soon as we have a code (don't wait for the splash) ──
+  useEffect(() => {
+    if (!codeInfo || pollingStartedRef.current) return;
+    pollingStartedRef.current = true;
+
     let cancelled = false;
 
     async function poll() {
       try {
-        const auth = await pollForToken(codeInfo!.deviceId, (attempt) => {
+        const auth = await pollForToken(codeInfo.deviceId, (attempt) => {
           if (!cancelled) setPollAttempt(attempt);
         });
         if (cancelled) return;
@@ -121,6 +138,10 @@ const SplashLoginScreen: React.FC<SplashLoginScreenProps> = ({
           token: auth.token,
           userId: auth.userId,
           plan: auth.plan,
+          githubLogin: auth.githubLogin,
+          displayName: auth.displayName,
+          trialDaysRemaining: auth.trialDaysRemaining ?? null,
+          billingDaysRemaining: auth.billingDaysRemaining ?? null,
           storedAt: new Date().toISOString(),
         };
         login(creds);
@@ -137,33 +158,17 @@ const SplashLoginScreen: React.FC<SplashLoginScreenProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [stage, codeInfo, login, onAuthenticated]);
-
-  // ── Animation finished callback ──
-  const handleAnimationDone = useCallback(() => {
-    setStage("waiting");
-  }, []);
+  }, [codeInfo, login, onAuthenticated]);
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Render: Animation phase
+  // Render: Loading backend-selected launch experience
   // ─────────────────────────────────────────────────────────────────────────
-  if (stage === "animation") {
+  if (stage === "loading") {
     return (
-      <Box
-        borderStyle="round"
-        borderColor="yellowBright"
-        flexDirection="column"
-        alignItems="center"
-        paddingX={2}
-        paddingY={1}
-      >
-        <LogoAnimated
-          hasDarkBackground
-          loop={false}
-          onFinished={handleAnimationDone}
-        />
+      <Box flexDirection="column" alignItems="center">
+        <PakalonLogo variant="splash" />
         <Box marginTop={1}>
-          <Spinner label={codeInfo ? "Ready — finishing animation…" : "Preparing login…"} />
+          <Spinner label="Preparing secure sign-in…" />
         </Box>
       </Box>
     );
@@ -191,8 +196,7 @@ const SplashLoginScreen: React.FC<SplashLoginScreenProps> = ({
               paddingX={2}
               paddingY={1}
             >
-              {/* PAKALON text logo — whiteBright block characters */}
-              <TextLogoAnimation hasDarkBackground autoPlay={false} loop={false} />
+              <PakalonLogo variant="splash" />
               <Text bold color="whiteBright">
                 Sign in to Pakalon
               </Text>
@@ -213,7 +217,7 @@ const SplashLoginScreen: React.FC<SplashLoginScreenProps> = ({
           paddingY={1}
           gap={1}
         >
-          {/* 6-digit code */}
+          {/* 6-character code */}
           {codeInfo ? (
             <BigCode code={codeInfo.code} />
           ) : (
@@ -229,6 +233,11 @@ const SplashLoginScreen: React.FC<SplashLoginScreenProps> = ({
               </Text>
             </Box>
             <Box marginTop={1}>
+              <Text dimColor>
+                {browserHint ?? "Your browser should open automatically. If it doesn't, use the link below."}
+              </Text>
+            </Box>
+            <Box>
               <Text dimColor>Log in or create an account, then enter the code above.</Text>
             </Box>
           </Box>
@@ -271,7 +280,7 @@ const SplashLoginScreen: React.FC<SplashLoginScreenProps> = ({
         gap={1}
       >
         <Text color="greenBright" bold>
-          ✓  Authenticated successfully!
+          Authenticated successfully
         </Text>
         <Spinner label="Starting Pakalon…" />
       </Box>
@@ -290,7 +299,7 @@ const SplashLoginScreen: React.FC<SplashLoginScreenProps> = ({
       paddingY={1}
       gap={1}
     >
-      <Text color="red" bold>✗  Authentication failed</Text>
+      <Text color="red" bold>Authentication failed</Text>
       <Text color="red">{error}</Text>
       <Text dimColor>Run `pakalon` again to retry.</Text>
     </Box>

@@ -1,12 +1,10 @@
 /**
- * ContextBar — live context window usage + credits display.
- * Shows project directory, a visual progress bar, token counts, streaming state,
- * and remaining AI credits for the current billing period.
- * T-CLI-01: updates live whenever getContextStats() fires via contextEvents.
+ * ContextBar — prominent context-window progress bar shown under the header.
  */
 import React from "react";
 import { Box, Text } from "ink";
 import * as path from "path";
+import { useModel, useSession } from "@/store/index.js";
 
 interface ContextBarProps {
   projectDir?: string;
@@ -47,87 +45,52 @@ const ContextBar: React.FC<ContextBarProps> = ({
   creditsRemaining,
   creditsTotal,
 }) => {
+  const { selectedModel, availableModels } = useModel();
+  const { remainingPct: sessionRemainingPct } = useSession();
   const dir = projectDir ? path.basename(projectDir) : process.cwd().split(path.sep).pop() ?? "~";
+  const modelContextLimit = availableModels.find((model) => model.id === selectedModel)?.contextLength;
+  const effectiveRemainingPct = remainingPct ?? sessionRemainingPct ?? undefined;
+  const effectiveContextLimit = contextLimit ?? modelContextLimit;
 
   // Compute used% — API remaining_pct takes precedence over local estimate
   const usedPct: number =
-    remainingPct !== undefined
-      ? Math.max(0, Math.min(100, 100 - remainingPct))
-      : tokenCount && contextLimit
-        ? Math.min(100, Math.round((tokenCount / contextLimit) * 100))
+    effectiveRemainingPct !== undefined
+      ? Math.max(0, Math.min(100, 100 - effectiveRemainingPct))
+      : tokenCount && effectiveContextLimit
+        ? Math.min(100, Math.round((tokenCount / effectiveContextLimit) * 100))
         : 0;
 
   const barColor =
     usedPct >= 80 ? "red" : usedPct >= 60 ? "yellow" : "green";
 
-  const bar = buildBar(usedPct);
+  const bar = buildBar(usedPct, 26);
 
   // Token counts label: "83.2k / 128k"
   const tokenLabel =
-    tokenCount && contextLimit
-      ? `${fmtTokens(tokenCount)} / ${fmtTokens(contextLimit)}`
+    tokenCount && effectiveContextLimit
+      ? `${fmtTokens(tokenCount)} / ${fmtTokens(effectiveContextLimit)}`
       : tokenCount
         ? `${fmtTokens(tokenCount)} tokens`
         : null;
 
   // Remaining label: "47.8k left" (or from API's remainingPct)
   const remaining =
-    remainingPct !== undefined
-      ? `${Math.round(remainingPct)}% left`
-      : tokenCount && contextLimit
-        ? `${fmtTokens(Math.max(0, contextLimit - tokenCount))} left`
+    effectiveRemainingPct !== undefined
+      ? `${Math.round(effectiveRemainingPct)}% left`
+      : tokenCount && effectiveContextLimit
+        ? `${fmtTokens(Math.max(0, effectiveContextLimit - tokenCount))} left`
         : null;
 
-  // Credits label: shown only when plan uses credits
-  const showCredits =
-    creditsTotal !== undefined && creditsTotal > 0 && creditsRemaining !== undefined;
-  const creditsPct = showCredits
-    ? Math.round(((creditsRemaining ?? 0) / (creditsTotal ?? 1)) * 100)
-    : 0;
-  const creditsColor =
-    creditsPct <= 10 ? "red" : creditsPct <= 25 ? "yellow" : "cyan";
-
   return (
-    <Box gap={1} paddingX={1}>
-      {/* Directory */}
-      <Text color="cyan">📁 {dir}</Text>
-
-      {/* Active file */}
-      {activeFile && (
-        <Text dimColor>{path.basename(activeFile)}</Text>
-      )}
-
-      {/* Visual progress bar */}
-      <Text color={barColor}>{bar}</Text>
-
-      {/* Used% label */}
-      <Text color={barColor} bold={usedPct >= 80}>
-        {usedPct}%
-      </Text>
-
-      {/* Token counts */}
-      {tokenLabel && (
-        <Text dimColor>{tokenLabel}</Text>
-      )}
-
-      {/* Remaining */}
-      {remaining && (
-        <Text color={usedPct >= 80 ? "red" : usedPct >= 60 ? "yellow" : "gray"}>
-          ({remaining})
-        </Text>
-      )}
-
-      {/* Credits display */}
-      {showCredits && (
-        <Text color={creditsColor}>
-          ⚡ {creditsRemaining}/{creditsTotal} cr
-        </Text>
-      )}
-
-      {/* Streaming indicator */}
-      {isStreaming && (
-        <Text color="magenta" dimColor>⟳ streaming</Text>
-      )}
+    <Box gap={2} paddingX={1} marginTop={0} marginBottom={0}>
+      <Text color="whiteBright" bold>context window</Text>
+      <Text color="white">{bar}</Text>
+      <Text color={barColor} bold={usedPct >= 80}>{usedPct}% used</Text>
+      {remaining && <Text dimColor>{remaining}</Text>}
+      {tokenLabel && <Text dimColor>{tokenLabel}</Text>}
+      <Text dimColor>{dir}</Text>
+      {activeFile && <Text dimColor>{path.basename(activeFile)}</Text>}
+      {isStreaming && <Text color="cyan">live</Text>}
     </Box>
   );
 };

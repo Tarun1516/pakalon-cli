@@ -402,8 +402,8 @@ class CyberSecurityTester:
         return results
 
     def write_subagent_md(self, out_dir: str, results: dict[str, Any]) -> str:
-        """Write subagent-5.md with cyber security test results."""
-        out_path = pathlib.Path(out_dir) / "subagent-5.md"
+        """Write subagent-6.md with cyber security test results."""
+        out_path = pathlib.Path(out_dir) / "subagent-6.md"
         summary = results.get("summary", {})
         findings = results.get("findings", [])
 

@@ -1,0 +1,1 @@
+export const DEFAULT_FREE_MODEL_ID = "arcee-ai/trinity-large-preview:free";

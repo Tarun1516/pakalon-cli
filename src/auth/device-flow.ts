@@ -2,8 +2,8 @@
  * Device code authentication flow — CLI side.
  *
  * Flow:
- *  1. CLI calls POST /auth/devices → gets device_id + 6-digit code
- *  2. CLI displays code to user with pakalon.com/login?code=XXXXXX URL
+ *  1. CLI calls POST /auth/devices → gets device_id + 6-character code
+ *  2. CLI displays the backend-generated code and verification URL
  *  3. CLI polls GET /auth/devices/{id}/token until status=approved
  *  4. On approval, CLI receives JWT and stores it via storage.ts
  */
@@ -20,16 +20,100 @@ export interface DeviceCodeResult {
   code: string;
   expiresIn: number; // seconds
   loginUrl: string;
+  launchExperience: "video" | "text";
+  isFirstMachineRun: boolean;
 }
 
 export interface AuthResult {
   token: string;
   userId: string;
   plan: string;
+  githubLogin?: string;
+  displayName?: string;
+  trialDaysRemaining?: number | null;
+  billingDaysRemaining?: number | null;
 }
 
 const POLL_INTERVAL_MS = 3_000; // 3 seconds
 const MAX_POLLS = 120; // 6 minutes total
+const DEFAULT_WEB_BASE_URL = process.env.PAKALON_WEB_URL ?? "http://localhost:3000";
+
+function stripTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, "");
+}
+
+function buildDeviceAuthPath(deviceId: string): string {
+  return `/${deviceId}/auth/`;
+}
+
+function buildDeviceAuthUrl(origin: string, deviceId: string): string {
+  return `${stripTrailingSlash(origin)}${buildDeviceAuthPath(deviceId)}`;
+}
+
+function isLocalOrigin(url: string): boolean {
+  try {
+    const { hostname } = new URL(url);
+    return hostname === "localhost" || hostname === "127.0.0.1";
+  } catch {
+    return false;
+  }
+}
+
+async function isReachableWebOrigin(origin: string, deviceId: string): Promise<boolean> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 1_500);
+
+  try {
+    const response = await fetch(buildDeviceAuthUrl(origin, deviceId), {
+      method: "GET",
+      redirect: "manual",
+      signal: controller.signal,
+    });
+
+    return response.status < 500 && response.status !== 404;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function resolveLoginUrl(deviceId: string, verificationUrl?: string): Promise<string> {
+  const explicitWebBaseUrl = process.env.PAKALON_WEB_URL?.trim();
+  if (explicitWebBaseUrl) {
+    return buildDeviceAuthUrl(explicitWebBaseUrl, deviceId);
+  }
+
+  const fallbackUrl = buildDeviceAuthUrl(DEFAULT_WEB_BASE_URL, deviceId);
+
+  if (verificationUrl && !isLocalOrigin(verificationUrl)) {
+    return verificationUrl.endsWith("/") ? verificationUrl : `${verificationUrl}/`;
+  }
+
+  const verificationOrigin = verificationUrl ? new URL(verificationUrl).origin : null;
+  const candidates = Array.from(
+    new Set(
+      [
+        DEFAULT_WEB_BASE_URL,
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        verificationOrigin,
+      ].filter((value): value is string => Boolean(value))
+    )
+  );
+
+  for (const candidate of candidates) {
+    if (await isReachableWebOrigin(candidate, deviceId)) {
+      return buildDeviceAuthUrl(candidate, deviceId);
+    }
+  }
+
+  if (verificationUrl && !isLocalOrigin(verificationUrl)) {
+    return verificationUrl.endsWith("/") ? verificationUrl : `${verificationUrl}/`;
+  }
+
+  return fallbackUrl;
+}
 
 /**
  * Step 1 — Request a device code from the server.
@@ -42,21 +126,32 @@ export async function requestDeviceCode(): Promise<DeviceCodeResult> {
     device_id: string;
     code: string;
     expires_in: number;
+    verification_url?: string;
+    launch_experience?: "video" | "text";
+    is_first_machine_run?: boolean;
   }>("/auth/devices", {
     device_id: devDeviceId,
     machine_id: machineId,
     mac_machine_id: macMachineId,
   });
 
-  const { device_id, code, expires_in } = response.data;
-  const webBaseUrl = process.env.PAKALON_WEB_URL ?? "http://localhost:3000";
-  const loginUrl = `${webBaseUrl}/${device_id}/auth`;
+  const {
+    device_id,
+    code,
+    expires_in,
+    verification_url,
+    launch_experience,
+    is_first_machine_run,
+  } = response.data;
+  const loginUrl = await resolveLoginUrl(device_id, verification_url);
 
   return {
     deviceId: device_id,
     code,
     expiresIn: expires_in,
     loginUrl,
+    launchExperience: launch_experience ?? "text",
+    isFirstMachineRun: is_first_machine_run ?? false,
   };
 }
 
@@ -83,12 +178,33 @@ export async function pollForToken(
         token?: string;
         user_id?: string;
         plan?: string;
+        github_login?: string;
+        display_name?: string;
+        trial_days_remaining?: number | null;
+        billing_days_remaining?: number | null;
       }>(`/auth/devices/${deviceId}/token`);
 
-      const { status, token, user_id, plan } = response.data;
+      const {
+        status,
+        token,
+        user_id,
+        plan,
+        github_login,
+        display_name,
+        trial_days_remaining,
+        billing_days_remaining,
+      } = response.data;
 
       if (status === "approved" && token && user_id) {
-        return { token, userId: user_id, plan: plan ?? "free" };
+        return {
+          token,
+          userId: user_id,
+          plan: plan ?? "free",
+          githubLogin: github_login,
+          displayName: display_name,
+          trialDaysRemaining: trial_days_remaining ?? null,
+          billingDaysRemaining: billing_days_remaining ?? null,
+        };
       }
 
       if (status === "expired") {
@@ -124,6 +240,10 @@ export async function runDeviceAuth(
     token: authResult.token,
     userId: authResult.userId,
     plan: authResult.plan,
+    githubLogin: authResult.githubLogin,
+    displayName: authResult.displayName,
+    trialDaysRemaining: authResult.trialDaysRemaining ?? null,
+    billingDaysRemaining: authResult.billingDaysRemaining ?? null,
     storedAt: new Date().toISOString(),
   };
   saveCredentials(creds);

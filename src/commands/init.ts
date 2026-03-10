@@ -486,7 +486,7 @@ export async function cmdInit(cwd: string = process.cwd(), initialPrompt?: strin
     process.env.PAKALON_USE_PROXY === "1",
   );
 
-  const model = process.env.PAKALON_INIT_MODEL ?? "openai/gpt-4o-mini";
+  const model = process.env.PAKALON_INIT_MODEL ?? "arcee-ai/trinity-large-preview:free";
   const authToken = process.env.PAKALON_TOKEN;
   const projectDescription = initialPrompt ?? path.basename(cwd);
 

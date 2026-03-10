@@ -3,12 +3,36 @@
  * T2-10: Auto-refresh available models from backend on mount + every 5 minutes.
  */
 import type { StateCreator } from "zustand";
+import { AxiosError } from "axios";
+
+import { createApiClient, getApiClient } from "@/api/client.js";
+import { DEFAULT_FREE_MODEL_ID } from "@/constants/models.js";
 
 export interface ModelInfo {
   id: string;
   name: string;
   contextLength: number;
   tier: "free" | "paid";
+}
+
+interface ApiModelRecord {
+  id?: string;
+  model_id?: string;
+  name: string;
+  context_length?: number;
+  context_window?: number;
+  tier?: "free" | "paid" | string;
+  pricing_tier?: "free" | "pro" | string;
+}
+
+function normalizeModelRecord(model: ApiModelRecord): ModelInfo {
+  const tier = model.tier ?? (model.pricing_tier === "free" ? "free" : "paid");
+  return {
+    id: model.id ?? model.model_id ?? "",
+    name: model.name,
+    contextLength: model.context_length ?? model.context_window ?? 0,
+    tier: tier === "free" ? "free" : "paid",
+  };
 }
 
 /** Context check result from backend */
@@ -24,17 +48,19 @@ export interface ModelState {
   availableModels: ModelInfo[];
   autoModel: ModelInfo | null;
   isLoadingModels: boolean;
+  modelsError: string | null;
   lastModelsFetchAt: number | null; // epoch ms
   // Actions
   setSelectedModel: (modelId: string) => void;
   setAvailableModels: (models: ModelInfo[]) => void;
   setAutoModel: (model: ModelInfo | null) => void;
   setLoadingModels: (loading: boolean) => void;
+  setModelsError: (error: string | null) => void;
   setLastModelsFetchAt: (ts: number | null) => void;
   // T2-10: Fetch and refresh models from backend
-  refreshModels: (apiBaseUrl?: string, authToken?: string) => Promise<void>;
+  refreshModels: (apiBaseUrl?: string, authToken?: string, force?: boolean) => Promise<void>;
   // T-005: Check context window status before starting AI
-  checkContextExhaustion: (modelId: string, apiBaseUrl?: string, authToken?: string) => Promise<ContextCheckResult>;
+  checkContextStatus: (modelId: string, apiBaseUrl?: string, authToken?: string) => Promise<ContextCheckResult>;
 }
 
 // Auto-refresh interval: 5 minutes
@@ -50,12 +76,14 @@ export const createModelSlice: StateCreator<
   availableModels: [],
   autoModel: null,
   isLoadingModels: false,
+  modelsError: null,
   lastModelsFetchAt: null,
 
   setSelectedModel: (modelId) => set({ selectedModel: modelId }),
   setAvailableModels: (models) => set({ availableModels: models }),
   setAutoModel: (model) => set({ autoModel: model }),
   setLoadingModels: (loading) => set({ isLoadingModels: loading }),
+  setModelsError: (error) => set({ modelsError: error }),
   setLastModelsFetchAt: (ts) => set({ lastModelsFetchAt: ts }),
 
   /**
@@ -75,54 +103,40 @@ export const createModelSlice: StateCreator<
       return;
     }
 
-    const baseUrl = apiBaseUrl ?? process.env.PAKALON_API_URL ?? "http://localhost:8000";
-    set({ isLoadingModels: true });
+    const client = apiBaseUrl ? createApiClient(apiBaseUrl) : getApiClient();
+    set({ isLoadingModels: true, modelsError: null });
 
     try {
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
-      if (authToken) {
-        headers["Authorization"] = `Bearer ${authToken}`;
-      }
+      const { data } = await client.get<{ models: ApiModelRecord[] }>("/models?include_all=true", {
+        headers: authToken
+          ? { Authorization: `Bearer ${authToken}` }
+          : undefined,
+      });
 
-      const res = await fetch(`${baseUrl}/models`, { headers });
-
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-      }
-
-      const data = await res.json() as {
-        models: Array<{ model_id: string; name: string; context_window: number; pricing_tier: string }>
-      };
-
-      const models: ModelInfo[] = (data.models ?? []).map((m) => ({
-        id: m.model_id,
-        name: m.name,
-        contextLength: m.context_window,
-        tier: m.pricing_tier === "pro" ? "paid" : "free",
-      }));
+      const models: ModelInfo[] = (data.models ?? [])
+        .map(normalizeModelRecord)
+        .filter((model) => Boolean(model.id));
 
       set({
         availableModels: models,
         lastModelsFetchAt: Date.now(),
         isLoadingModels: false,
+        modelsError: null,
       });
 
-      // Auto-select first free model if nothing is selected yet
+      // Auto-select the preferred free model if nothing is selected yet.
       if (!get().selectedModel && models.length > 0) {
-        const firstFree = models.find((m) => m.tier === "free") ?? models[0];
-        if (firstFree) {
-          set({ selectedModel: firstFree.id });
+        const preferredFree = models.find((model) => model.id === DEFAULT_FREE_MODEL_ID);
+        const firstFree = models.find((model) => model.tier === "free") ?? models[0];
+        const nextModel = preferredFree ?? firstFree;
+        if (nextModel) {
+          set({ selectedModel: nextModel.id });
         }
       }
     } catch (err) {
       // Non-fatal: keep existing models, just stop loading
-      set({ isLoadingModels: false });
-      // Don't reset lastModelsFetchAt — avoid hammering on repeated errors
-      if (process.env.NODE_ENV !== "production") {
-        console.warn("[model-slice] refreshModels failed:", err);
-      }
+      const message = err instanceof Error ? err.message : "Unable to load models.";
+      set({ isLoadingModels: false, modelsError: message });
     }
   },
 
@@ -132,40 +146,32 @@ export const createModelSlice: StateCreator<
    * The backend returns 429 when context is exhausted.
    */
   checkContextStatus: async (modelId: string, apiBaseUrl?: string, authToken?: string) => {
-    const baseUrl = apiBaseUrl ?? process.env.PAKALON_API_URL ?? "http://localhost:8000";
+    const client = apiBaseUrl ? createApiClient(apiBaseUrl) : getApiClient();
 
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-    if (authToken) {
-      headers["Authorization"] = `Bearer ${authToken}`;
-    }
-
-    const res = await fetch(`${baseUrl}/models/${encodeURIComponent(modelId)}/context`, {
-      headers,
-    });
-
-    // 429 means context exhausted - this is expected, not an error
-    if (res.status === 429) {
-      const detail = await res.text();
-      // Extract message from response or use default
+    try {
+      const { data } = await client.get<ContextCheckResult>(`/models/${encodeURIComponent(modelId)}/context`, {
+        headers: authToken
+          ? { Authorization: `Bearer ${authToken}` }
+          : undefined,
+      });
       return {
-        exhausted: true,
-        remaining_pct: 0,
-        message: detail || `Context exhausted for ${modelId}. Use /model switch to continue.`,
+        model_id: data.model_id ?? modelId,
+        exhausted: data.exhausted ?? false,
+        remaining_pct: data.remaining_pct ?? 100,
+        message: data.message,
       };
+    } catch (err) {
+      const axiosError = err as AxiosError<{ detail?: string }>;
+      if (axiosError.response?.status === 429) {
+        return {
+          model_id: modelId,
+          exhausted: true,
+          remaining_pct: 0,
+          message: axiosError.response.data?.detail || `Context exhausted for ${modelId}. Use /model switch to continue.`,
+        };
+      }
+      throw err;
     }
-
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-    }
-
-    const data = await res.json() as ContextCheckResult;
-    return {
-      exhausted: data.exhausted ?? false,
-      remaining_pct: data.remaining_pct ?? 100,
-      message: data.message,
-    };
   },
 });
 

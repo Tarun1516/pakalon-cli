@@ -67,7 +67,7 @@ export interface ProjectConfig {
   /** Comma-separated or array of disallowed tool names */
   disallowedTools?: string | string[];
   /** Permission mode override */
-  permissionMode?: "plan" | "edit" | "auto-accept" | "bypass";
+  permissionMode?: "plan" | "normal" | "auto-accept" | "orchestration" | "edit" | "bypass";
   /** Additional MCP servers to register on startup */
   mcpServers?: McpServerOverride[];
   /** Enable privacy mode */
@@ -242,7 +242,7 @@ const STARTER_CONFIG = `{
 
   // "model": "anthropic/claude-3-5-sonnet",
   // "fallbackModel": "openai/gpt-4o-mini",
-  // "permissionMode": "auto-accept",   // plan | edit | auto-accept | bypass
+  // "permissionMode": "auto-accept",   // plan | normal | auto-accept | orchestration
 
   // Restrict which tools the AI may use:
   // "allowedTools": ["readFile", "writeFile", "bash", "search"],

@@ -1,0 +1,12 @@
+[project]
+name = "pakalon-cli-backend-runner"
+version = "0.1.0"
+description = "Local uv runner config so backend commands work from pakalon-cli during development"
+requires-python = ">=3.12"
+dependencies = [
+    "pakalon-backend",
+    "uvicorn[standard]>=0.34.0",
+]
+
+[tool.uv.sources]
+pakalon-backend = { path = "../pakalon-backend", editable = true }

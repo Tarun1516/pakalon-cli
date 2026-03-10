@@ -63,6 +63,17 @@ export const createTodoSlice: StateCreator<
 					: t
 			),
 		}));
+		// T-HK-09: Fire TaskCompleted when status becomes "completed"
+		if (updates.status === "completed") {
+			const todo = get().todos.find((t) => t.id === id);
+			import("@/ai/hooks.js").then(({ runHooks }) => {
+				runHooks("TaskCompleted", {
+					taskId: id,
+					content: todo?.content ?? "",
+					priority: todo?.priority ?? "medium",
+				}).catch(() => {});
+			}).catch(() => {});
+		}
 	},
 
 	removeTodo: (id: string) => {

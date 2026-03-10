@@ -8,26 +8,42 @@ import { useStore } from "@/store/index.js";
 import { debugLog } from "@/utils/logger.js";
 
 interface ModelItem {
-  model_id: string;
+  id?: string;
+  model_id?: string;
   name: string;
-  context_window: number;
-  pricing_tier: string;
+  context_length?: number;
+  context_window?: number;
+  tier?: string;
+  pricing_tier?: string;
   remaining_pct?: number;
+}
+
+function normalizeModel(model: ModelItem) {
+  const tier: "free" | "paid" = (model.tier ?? (model.pricing_tier === "free" ? "free" : "paid")) === "free"
+    ? "free"
+    : "paid";
+  return {
+    id: model.id ?? model.model_id ?? "",
+    name: model.name,
+    contextLength: model.context_length ?? model.context_window ?? 0,
+    tier,
+    remainingPct: model.remaining_pct,
+  };
 }
 
 export async function cmdListModels(): Promise<void> {
   try {
     const api = getApiClient();
-    const res = await api.get<{ models: ModelItem[] }>("/models");
-    const models = res.data.models ?? [];
+    const res = await api.get<{ models: ModelItem[] }>("/models?include_all=true");
+    const models = (res.data.models ?? []).map(normalizeModel).filter((model) => Boolean(model.id));
 
     if (models.length === 0) {
       console.log("No models available. Try again shortly — model cache may be refreshing.");
       return;
     }
 
-    const free = models.filter((m) => m.pricing_tier === "free");
-    const pro = models.filter((m) => m.pricing_tier === "pro");
+    const free = models.filter((m) => m.tier === "free");
+    const paid = models.filter((m) => m.tier !== "free");
 
     const ctx = (n: number) =>
       n >= 1000 ? `${Math.round(n / 1000)}K` : `${n}`;
@@ -35,20 +51,20 @@ export async function cmdListModels(): Promise<void> {
     console.log("\n── Free Models ────────────────────────────────────────────────");
     for (const m of free) {
       const remaining =
-        m.remaining_pct !== undefined ? ` [${m.remaining_pct}% remaining]` : "";
-      console.log(`  ${m.model_id.padEnd(50)} ${ctx(m.context_window).padStart(8)}${remaining}`);
+        m.remainingPct !== undefined ? ` [${m.remainingPct}% remaining]` : "";
+      console.log(`  ${m.id.padEnd(50)} ${ctx(m.contextLength).padStart(8)}${remaining}`);
     }
 
-    if (pro.length > 0) {
+    if (paid.length > 0) {
       console.log("\n── Pro Models ─────────────────────────────────────────────────");
-      for (const m of pro) {
+      for (const m of paid) {
         const remaining =
-          m.remaining_pct !== undefined ? ` [${m.remaining_pct}% remaining]` : "";
-        console.log(`  ${m.model_id.padEnd(50)} ${ctx(m.context_window).padStart(8)}${remaining}  [PRO]`);
+          m.remainingPct !== undefined ? ` [${m.remainingPct}% remaining]` : "";
+        console.log(`  ${m.id.padEnd(50)} ${ctx(m.contextLength).padStart(8)}${remaining}  [PRO]`);
       }
     }
 
-    console.log(`\nTotal: ${free.length} free, ${pro.length} pro\n`);
+    console.log(`\nTotal: ${free.length} free, ${paid.length} pro\n`);
   } catch (err) {
     debugLog(`[models] Error listing models: ${String(err)}`);
     console.error("Failed to fetch models:", String(err));
@@ -59,9 +75,9 @@ export async function cmdListModels(): Promise<void> {
 export async function cmdSetModel(modelId: string): Promise<void> {
   try {
     const api = getApiClient();
-    const res = await api.get<{ models: ModelItem[] }>("/models");
-    const models = res.data.models ?? [];
-    const found = models.find((m) => m.model_id === modelId);
+    const res = await api.get<{ models: ModelItem[] }>("/models?include_all=true");
+    const models = (res.data.models ?? []).map(normalizeModel).filter((model) => Boolean(model.id));
+    const found = models.find((m) => m.id === modelId);
 
     if (!found) {
       console.error(`Model "${modelId}" not found. Run \`pakalon model list\` to see available models.`);
@@ -80,10 +96,11 @@ export async function cmdSetModel(modelId: string): Promise<void> {
 export async function cmdAutoModel(): Promise<void> {
   try {
     const api = getApiClient();
-    const res = await api.get<{ model_id: string; name: string }>("/models/auto");
+    const res = await api.get<{ id?: string; model_id?: string; name: string; context_length?: number; context_window?: number; tier?: string; pricing_tier?: string }>("/models/auto");
     const result = res.data;
-    useStore.getState().setAutoModel({ id: result.model_id, name: result.name, contextLength: 0, tier: "free" });
-    console.log(`✓ Auto-selected model: ${result.model_id}`);
+    const normalized = normalizeModel(result);
+    useStore.getState().setAutoModel(normalized);
+    console.log(`✓ Auto-selected model: ${normalized.id}`);
   } catch (err) {
     console.error("Failed to auto-select model:", String(err));
     process.exit(1);

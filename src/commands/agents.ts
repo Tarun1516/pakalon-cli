@@ -369,8 +369,10 @@ async function createWorktree(
       cwd: baseDir,
       stdio: "pipe",
     });
-    debugLog(`[agents] Created worktree ${worktreePath} for agent ${agentId}`);
-    return worktreePath;
+    debugLog(`[agents] Created worktree ${worktreePath} for agent ${agentId}`);    // T-HK-11: Fire WorktreeCreate hook
+    import("@/ai/hooks.js").then(({ runHooks }) => {
+      runHooks("WorktreeCreate", { cwd: worktreePath, worktreePath, agentId }, baseDir).catch(() => {});
+    }).catch(() => {});    return worktreePath;
   } catch (err) {
     debugLog(`[agents] Could not create worktree for agent ${agentId}: ${String(err)}`);
     return null;
@@ -387,8 +389,10 @@ async function removeWorktree(
       cwd: baseDir,
       stdio: "pipe",
     });
-    debugLog(`[agents] Removed worktree ${worktreePath}`);
-  } catch (err) {
+    debugLog(`[agents] Removed worktree ${worktreePath}`);    // T-HK-11: Fire WorktreeRemove hook
+    import("@/ai/hooks.js").then(({ runHooks }) => {
+      runHooks("WorktreeRemove", { cwd: baseDir, worktreePath }, baseDir).catch(() => {});
+    }).catch(() => {});  } catch (err) {
     debugLog(`[agents] Could not remove worktree ${worktreePath}: ${String(err)}`);
   }
 }
@@ -485,6 +489,25 @@ export async function cmdRunAgentsParallel(
     }
   };
 
+  // T-HK-08: TeammateIdle — fire after each agent finishes; exit-code 2 re-runs the agent
+  const runOneWithIdleHook = async (req: AgentRunRequest): Promise<AgentRunResult> => {
+    let result = await runOne(req);
+    try {
+      const { runHooks } = await import("@/ai/hooks.js");
+      const hookResults = await runHooks(
+        "TeammateIdle",
+        { cwd: req.projectDir ?? process.cwd(), agentName: req.agentName, success: result.success },
+        req.projectDir
+      );
+      // Exit code 2 from a TeamateIdle hook means "keep working" — run the agent once more
+      if (hookResults.some((r) => r.exitCode === 2)) {
+        debugLog(`[agents] TeammateIdle hook exit 2 for ${req.agentName} — re-running`);
+        result = await runOne(req);
+      }
+    } catch { /* hooks are non-blocking */ }
+    return result;
+  };
+
   debugLog(`[agents] Running ${requests.length} agents in parallel: ${requests.map((r) => r.agentName).join(", ")}${useWorktreesDefault ? " (worktrees: ON)" : ""}`);
-  return Promise.all(requests.map(runOne));
+  return Promise.all(requests.map(runOneWithIdleHook));
 }

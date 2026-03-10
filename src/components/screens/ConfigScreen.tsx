@@ -54,7 +54,7 @@ const TABS: TabDef[] = [
     fields: [
       { key: "defaultModel", label: "Default Model", type: "string", description: "Model ID used for all sessions (e.g. anthropic/claude-3-5-sonnet)" },
       { key: "fallbackModel", label: "Fallback Model", type: "string", description: "Model used when the default fails or rate-limits" },
-      { key: "permissionMode", label: "Permission Mode", type: "string", description: "plan | edit | auto-accept | bypass" },
+      { key: "permissionMode", label: "Permission Mode", type: "string", description: "plan | normal | auto-accept | orchestration" },
       { key: "maxBudgetUsd", label: "Max Budget (USD)", type: "number", description: "Session stops when this spend limit is reached" },
       { key: "autoCompact", label: "Auto Compact", type: "boolean", description: "Automatically compress context when it nears the window limit", defaultValue: true },
       { key: "verbose", label: "Verbose Output", type: "boolean", description: "Show extra debug info in the TUI" },

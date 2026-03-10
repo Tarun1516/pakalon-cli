@@ -312,6 +312,104 @@ async def _detect_and_install_packages(
 
 
 # ------------------------------------------------------------------
+# Penpot Bidirectional Sync (T-P3-15/T-P3-16)
+# Polls for Phase 2 Penpot edits before SA1 begins, so the agent
+# always starts from the latest designer-approved wireframe.
+# ------------------------------------------------------------------
+
+async def penpot_sync(state: Phase3State) -> Phase3State:
+    """
+    Node: T-P3-15/16 — Check the Penpot file referenced from Phase 2 for
+    user edits made *since* the wireframe was approved, and update the
+    in-memory wireframe_svg before SA1 starts.
+
+    If Penpot is unavailable or no file_id is stored, this is a no-op.
+    """
+    sse = state.get("send_sse") or (lambda e: None)
+
+    # Retrieve penpot_file_id stored by Phase 2 (via run_phase3 initialiser below)
+    project_dir = pathlib.Path(state.get("project_dir", "."))
+    phase2_dir = get_phase_dir(project_dir, 2, create=False)
+
+    penpot_file_id: str | None = None
+    penpot_project_url: str | None = state.get("penpot_project_url")
+
+    # Try to load penpot_file_id from the Phase 2 manifest
+    manifest_path = phase2_dir / "phase-2-manifest.json"
+    if manifest_path.exists():
+        try:
+            _manifest = json.loads(manifest_path.read_text())
+            penpot_file_id = _manifest.get("penpot_file_id")
+            if not penpot_project_url:
+                penpot_project_url = _manifest.get("penpot_project_url") or _manifest.get("penpot_file_url")
+        except Exception:
+            pass
+
+    if not penpot_file_id:
+        sse({"type": "text_delta", "content": "🖌  Penpot sync: no Phase 2 file ID — skipping.\n"})
+        return state
+
+    sse({"type": "text_delta", "content": f"🖌  Penpot sync: checking for design updates (file {penpot_file_id[:8]}…)\n"})
+
+    try:
+        try:
+            from ...tools.penpot import PenpotTool as _PT  # type: ignore
+        except ImportError:
+            import sys as _sys
+            import pathlib as _pl
+            _root = str(_pl.Path(__file__).resolve().parents[2])
+            if _root not in _sys.path:
+                _sys.path.insert(0, _root)
+            from tools.penpot import PenpotTool as _PT  # type: ignore
+
+        tool = _PT()
+        if not tool.is_running():
+            sse({"type": "text_delta", "content": "  Penpot not running — skipping sync.\n"})
+            return state
+
+        # Compare current revision against what was stored in Phase 2
+        meta = tool.get_file_meta(penpot_file_id)
+        if "error" in meta:
+            sse({"type": "text_delta", "content": "  Penpot file not accessible — skipping sync.\n"})
+            return state
+
+        current_revn: int | None = meta.get("revn")
+        stored_revn: int | None = None
+        if manifest_path.exists():
+            try:
+                stored_revn = json.loads(manifest_path.read_text()).get("penpot_revn")
+            except Exception:
+                pass
+
+        if current_revn is not None and stored_revn is not None and current_revn == stored_revn:
+            sse({"type": "text_delta", "content": "  ✅ Penpot design unchanged since Phase 2.\n"})
+            return state
+
+        # Changes detected — pull the latest SVG
+        sse({"type": "text_delta", "content": f"  🔄 New Penpot revision {current_revn} detected — re-fetching wireframe...\n"})
+        updated_svg = tool.export_svg(penpot_file_id)
+        if updated_svg and not updated_svg.startswith("<!-- Export failed"):
+            state["wireframe_svg"] = updated_svg
+            # Persist updated SVG to phase-2 directory so SA1 can read it
+            (phase2_dir / "wireframe-final.svg").write_text(updated_svg)
+            sse({
+                "type": "design_updated",
+                "message": f"Penpot revision {current_revn}: wireframe updated for Phase 3.",
+            })
+            sse({"type": "text_delta", "content": "  ✅ Wireframe updated from Penpot — SA1 will use latest design.\n"})
+        else:
+            sse({"type": "text_delta", "content": "  ⚠️  SVG export failed — using cached wireframe.\n"})
+
+        if penpot_project_url:
+            state["penpot_project_url"] = penpot_project_url
+
+    except Exception as _pe:
+        sse({"type": "text_delta", "content": f"  Penpot sync error: {_pe} — continuing with cached wireframe.\n"})
+
+    return state
+
+
+# ------------------------------------------------------------------
 # SA1: Frontend Design (UI scaffold from wireframe + components)
 # ------------------------------------------------------------------
 
@@ -804,6 +902,70 @@ async def sa4_debugging_testing(state: Phase3State) -> Phase3State:
     log.log("SA4:DebuggingTesting", "Validation complete", json.dumps(results, indent=2), status="info")
     state["validation_results"] = results
 
+    # T-LSP-04: Fetch LSP diagnostics via bridge for generated TS/JS/Python files and do one more fix pass
+    lsp_diagnostics_results: list[dict] = []
+    try:
+        import httpx as _httpx_lsp
+        _bridge_url = "http://localhost:7432"
+        _all_gen_files = (
+            [str(f) for f in state.get("scaffolded_files", [])]
+            + [str(f) for f in state.get("component_files", [])]
+        )
+        _ts_files = [f for f in _all_gen_files if f.endswith((".ts", ".tsx", ".js", ".jsx", ".py"))][:5]
+        if _ts_files:
+            sse({"type": "text_delta", "content": f"  🔍 SA4 LSP: checking {len(_ts_files)} generated files for IDE diagnostics...\n"})
+            for _fp in _ts_files:
+                try:
+                    _resp = _httpx_lsp.post(
+                        f"{_bridge_url}/lsp/diagnostics",
+                        json={"file_path": _fp, "workspace_dir": str(project_dir)},
+                        timeout=10.0,
+                    )
+                    if _resp.status_code == 200:
+                        _diags = _resp.json().get("diagnostics", [])
+                        for _d in _diags:
+                            lsp_diagnostics_results.append({**_d, "source_file": _fp})
+                except Exception:
+                    pass
+
+            # If LSP found new errors not caught by tsc/eslint, do one targeted fix pass
+            _lsp_errors = [d for d in lsp_diagnostics_results if d.get("severity") in ("error", 1)]
+            if _lsp_errors:
+                sse({"type": "text_delta", "content": f"  🤖 SA4 LSP: {len(_lsp_errors)} IDE error(s) — running targeted fix pass...\n"})
+                _lsp_err_text = "\n".join(
+                    f"{e.get('source_file','')}:{e.get('range',{}).get('start',{}).get('line','?')}: {e.get('message','')}"
+                    for e in _lsp_errors[:20]
+                )
+                _lsp_fix_raw = await _llm(
+                    [{"role": "user", "content": (
+                        f"Fix these IDE (LSP) errors in the generated files:\n\n{_lsp_err_text[:3000]}\n\n"
+                        "Return ONLY a JSON array of: [{\"path\": \"src/...\", \"content\": \"full fixed file content\"}]"
+                    )}],
+                    max_tokens=3000,
+                )
+                _lsp_json_match = _re.search(r"\[.*\]", _lsp_fix_raw, _re.DOTALL)
+                if _lsp_json_match:
+                    try:
+                        _lsp_fixes = json.loads(_lsp_json_match.group())
+                        for _fix in _lsp_fixes:
+                            _rel = _fix.get("path", "")
+                            _content = _fix.get("content", "")
+                            if _rel and _content:
+                                _fp2 = project_dir / _rel
+                                if _fp2.exists() or _fp2.parent.exists():
+                                    _fp2.parent.mkdir(parents=True, exist_ok=True)
+                                    _fp2.write_text(_content)
+                                    sse({"type": "text_delta", "content": f"    LSP-fixed: {_rel}\n"})
+                    except Exception:
+                        pass
+    except ImportError:
+        pass  # httpx not available — skip LSP pass
+    except Exception as _lsp_err:
+        sse({"type": "text_delta", "content": f"  LSP diagnostics skipped: {_lsp_err}\n"})
+
+    results["lsp_diagnostics"] = lsp_diagnostics_results
+    state["validation_results"] = results
+
     # T-CLI-13: Chrome DevTools MCP dynamic browser testing with screen recording
     chrome_results: dict = {}
     sse({"type": "text_delta", "content": "🌐 SA4: Running Chrome DevTools browser validation (screenshot + recording)...\n"})
@@ -954,6 +1116,178 @@ async def sa4_debugging_testing(state: Phase3State) -> Phase3State:
             sse({"type": "text_delta", "content": f"  Vercel TDD check failed: {vtdd_err}\n"})
 
     results["vercel_tdd"] = vercel_tdd_result
+
+    # T-P3-19/22/25/26/27: AgentBrowser — accessibility tree, annotated screenshot,
+    # network request capture, and console error detection.
+    agent_browser_results: dict = {}
+    sse({"type": "text_delta", "content": "🤖 SA4: AgentBrowser — accessibility · network · console checks...\n"})
+    try:
+        from .agent_browser import AgentBrowser
+        ab = AgentBrowser(project_dir=str(project_dir))
+        target_url = "http://localhost:3000"
+
+        # T-P3-19: Accessibility tree snapshot
+        snap = await ab.snapshot(target_url)
+        node_count = len(snap.get("nodes", [])) if isinstance(snap, dict) else 0
+        agent_browser_results["snapshot"] = {"node_count": node_count}
+        sse({"type": "text_delta", "content": f"  🌳 Accessibility tree: {node_count} nodes\n"})
+
+        # T-P3-22: Annotated screenshot for multimodal analysis
+        ann_ss = await ab.screenshot(target_url, annotate=True)
+        ann_path = ann_ss.get("path") if isinstance(ann_ss, dict) else None
+        if ann_path:
+            import shutil as _shutil
+            _src = pathlib.Path(ann_path)
+            if _src.exists():
+                _dest = get_test_evidence_dir(project_dir, create=True) / "sa4-agent-browser-annotated.png"
+                _shutil.copy2(_src, _dest)
+                agent_browser_results["annotated_screenshot"] = str(_dest)
+                log.log_file_created("SA4:AgentBrowser", str(_dest))
+                sse({"type": "text_delta", "content": "  📸 Annotated screenshot → test-evidence/sa4-agent-browser-annotated.png\n"})
+
+        # T-P3-26: Network request capture — verify frontend ↔ backend integration
+        net_reqs = await ab.network_requests(target_url)
+        net_list = net_reqs if isinstance(net_reqs, list) else []
+        failed_reqs = [r for r in net_list if isinstance(r, dict) and int(r.get("status", 200)) >= 400]
+        agent_browser_results["network_requests_total"] = len(net_list)
+        agent_browser_results["network_requests_failed"] = len(failed_reqs)
+        if failed_reqs:
+            sse({"type": "text_delta", "content": f"  ⚠️  {len(failed_reqs)} failed network requests\n"})
+        else:
+            sse({"type": "text_delta", "content": f"  ✅ Network: {len(net_list)} requests, none failed\n"})
+
+        # T-P3-27: Console error detection — fail hard on uncaught JS errors
+        console_errs = await ab.console_errors(target_url)
+        err_list = console_errs if isinstance(console_errs, list) else []
+        # Filter known benign warnings
+        real_errs = [e for e in err_list if not any(skip in str(e) for skip in ("favicon", "hot-reload", "HMR"))]
+        agent_browser_results["console_errors"] = real_errs[:20]
+        if real_errs:
+            sse({
+                "type": "text_delta",
+                "content": f"  ❌ {len(real_errs)} console error(s):\n" + "".join(f"    • {e}\n" for e in real_errs[:5]),
+            })
+        else:
+            sse({"type": "text_delta", "content": "  ✅ No console errors detected\n"})
+
+        # T-P3-25: Visual regression baseline — save screenshot for future drift tracking
+        baseline_ss = await ab.screenshot(target_url)
+        baseline_path = baseline_ss.get("path") if isinstance(baseline_ss, dict) else None
+        if baseline_path:
+            import shutil as _shutil2
+            _bsrc = pathlib.Path(baseline_path)
+            if _bsrc.exists():
+                _bdest = get_test_evidence_dir(project_dir, create=True) / "sa4-baseline.png"
+                _shutil2.copy2(_bsrc, _bdest)
+                agent_browser_results["baseline_screenshot"] = str(_bdest)
+                log.log_file_created("SA4:AgentBrowser", str(_bdest))
+                sse({"type": "text_delta", "content": "  📷 Visual baseline → test-evidence/sa4-baseline.png\n"})
+
+    except Exception as _ab_err:
+        agent_browser_results = {"skipped": str(_ab_err)}
+        sse({"type": "text_delta", "content": f"  AgentBrowser checks skipped: {_ab_err}\n"})
+
+    results["agent_browser"] = agent_browser_results
+
+    # T-P3-20/21/23/24: Interactive element testing + visual TDD loop
+    tdd_loop_results: dict = {"skipped": "agent_browser unavailable"}
+    if not agent_browser_results.get("skipped"):
+        sse({"type": "text_delta", "content": "🔄 SA4: Interactive TDD loop — click/fill testing + visual diff...\n"})
+        try:
+            from .agent_browser import AgentBrowser, run_tdd_loop
+            ab2 = AgentBrowser(project_dir=str(project_dir))
+            target_url = "http://localhost:3000"
+            evidence_dir = get_test_evidence_dir(project_dir, create=True)
+
+            # T-P3-20: Click first interactive element found in accessibility tree
+            snap_data = agent_browser_results.get("snapshot", {})
+            snap_tree = snap_data.get("tree") if isinstance(snap_data, dict) else None
+            if snap_tree:
+                # Collect clickable refs from the snapshot tree
+                def _collect_refs(node: dict, refs: list, max_refs: int = 3) -> None:
+                    if not isinstance(node, dict) or len(refs) >= max_refs:
+                        return
+                    role = node.get("role", "")
+                    ref = node.get("ref")
+                    if role in ("button", "link", "menuitem") and ref:
+                        refs.append(ref)
+                    for child in node.get("children", []) or []:
+                        _collect_refs(child, refs, max_refs)
+
+                clickable_refs: list = []
+                _collect_refs(snap_tree, clickable_refs)
+                click_results: list = []
+                for ref in clickable_refs[:2]:
+                    click_res = await ab2.click(ref)
+                    click_results.append({"ref": ref, **click_res})
+                    sse({"type": "text_delta", "content": f"  🖱️  Clicked {ref}: {click_res.get('clicked') or click_res.get('error', '?')}\n"})
+                tdd_loop_results["click_tests"] = click_results
+
+                # T-P3-24: Fill form inputs found in the accessibility tree
+                def _collect_input_refs(node: dict, refs: list, max_refs: int = 3) -> None:
+                    if not isinstance(node, dict) or len(refs) >= max_refs:
+                        return
+                    role = node.get("role", "")
+                    ref = node.get("ref")
+                    if role in ("textbox", "searchbox", "combobox", "spinbutton") and ref:
+                        refs.append((ref, node.get("name", "test input")))
+                    for child in node.get("children", []) or []:
+                        _collect_input_refs(child, refs, max_refs)
+
+                input_refs: list = []
+                _collect_input_refs(snap_tree, input_refs)
+                fill_results: list = []
+                for ref, label in input_refs[:2]:
+                    fill_val = "test@example.com" if "email" in label.lower() else "test_value"
+                    fill_res = await ab2.fill(ref, fill_val)
+                    fill_results.append({"ref": ref, "value": fill_val, **fill_res})
+                    sse({"type": "text_delta", "content": f"  ✍️  Filled {ref} ({label}): '{fill_val}'\n"})
+                tdd_loop_results["fill_tests"] = fill_results
+
+            # T-P3-21: Visual diff screenshot vs Phase 2 wireframe baseline
+            wireframe_png = ""
+            for _wf in [
+                project_dir / ".pakalon-agents" / "ai-agents" / "phase-2" / "wireframe.png",
+                project_dir / ".pakalon-agents" / "ai-agents" / "phase-2" / "tdd-screenshots" / "wireframe.png",
+                project_dir / ".pakalon-agents" / "ai-agents" / "phase-2" / "wireframes" / "wireframe-baseline.png",
+            ]:
+                if _wf.exists():
+                    wireframe_png = str(_wf)
+                    break
+
+            diff_result = await ab2.diff_screenshot(
+                baseline_path=wireframe_png or str(evidence_dir / "sa4-baseline.png"),
+                current_url=target_url,
+                output_path=str(evidence_dir / "sa4-visual-diff.png"),
+            )
+            diff_pct = diff_result.get("diff_pct", 0.0)
+            above = diff_result.get("above_threshold", False)
+            tdd_loop_results["visual_diff"] = diff_result
+            sse({
+                "type": "text_delta",
+                "content": f"  🖼️  Visual diff vs wireframe: {diff_pct}%{' ⚠ ABOVE THRESHOLD' if above else ' ✅'}\n",
+            })
+
+            # T-P3-23: Full TDD loop (snapshot → diff → console errors, max 2 iterations)
+            wireframe_for_tdd = wireframe_png or str(evidence_dir / "sa4-baseline.png")
+            loop_result = await run_tdd_loop(
+                target_url=target_url,
+                wireframe_screenshot=wireframe_for_tdd,
+                project_dir=str(project_dir),
+                max_iterations=2,
+                send_sse=sse,
+            )
+            tdd_loop_results["tdd_loop"] = loop_result
+            if loop_result.get("passed"):
+                sse({"type": "text_delta", "content": f"  ✅ TDD loop passed after {loop_result.get('iterations', 1)} iteration(s)\n"})
+            else:
+                sse({"type": "text_delta", "content": f"  ⚠️  TDD loop: some checks failed — see test-evidence/\n"})
+
+        except Exception as _tdd_err:
+            tdd_loop_results = {"error": str(_tdd_err)}
+            sse({"type": "text_delta", "content": f"  TDD loop skipped: {_tdd_err}\n"})
+
+    results["tdd_loop"] = tdd_loop_results
 
     # Save phase-3.md summary
     out_dir = get_phase_dir(project_dir, 3)
@@ -1183,6 +1517,7 @@ def build_phase3_graph() -> Any:
         return None
     graph = StateGraph(Phase3State)
     for name, fn in [
+        ("penpot_sync", penpot_sync),
         ("sa1_frontend_design", sa1_frontend_design),
         ("sa2_backend_frame", sa2_backend_frame),
         ("sa3_integration_wiring", sa3_integration_wiring),
@@ -1191,7 +1526,8 @@ def build_phase3_graph() -> Any:
         ("run_auditor", run_auditor_node),
     ]:
         graph.add_node(name, fn)
-    graph.set_entry_point("sa1_frontend_design")
+    graph.set_entry_point("penpot_sync")
+    graph.add_edge("penpot_sync", "sa1_frontend_design")
     graph.add_edge("sa1_frontend_design", "sa2_backend_frame")
     graph.add_edge("sa2_backend_frame", "sa3_integration_wiring")
     graph.add_edge("sa3_integration_wiring", "sa4_debugging_testing")
@@ -1200,7 +1536,12 @@ def build_phase3_graph() -> Any:
     graph.add_conditional_edges("sa5_user_feedback", _sa5_to_auditor_or_end, {"run_auditor": "run_auditor", END: END})
     # Auditor → SA1 loop (YOLO, not done) or END (done / HIL)
     graph.add_conditional_edges("run_auditor", _auditor_router, {"sa1_frontend_design": "sa1_frontend_design", END: END})
-    return graph.compile()
+    try:
+        from ..shared.langgraph_checkpointer import build_checkpointer  # noqa: PLC0415
+        _ckpt = build_checkpointer()
+    except Exception:
+        _ckpt = None
+    return graph.compile(checkpointer=_ckpt) if _ckpt is not None else graph.compile()
 
 
 async def run_phase3(
@@ -1285,7 +1626,27 @@ async def run_phase3(
         if is_yolo:
             state = await run_auditor_node(state)
     else:
-        state = await graph.ainvoke(initial)
+        try:
+            from ..shared.langgraph_checkpointer import thread_config as _tc3  # noqa: PLC0415
+            _cfg3 = _tc3(user_id, project_dir, phase=3)
+        except Exception:
+            _cfg3 = {}
+        state = await graph.ainvoke(initial, config=_cfg3)
+    # T-RAG-01C: store Phase 3 summary in Mem0
+    try:
+        from ..shared.langgraph_checkpointer import store_phase_mem0  # noqa: PLC0415
+        _all_p3 = state.get("scaffolded_files", []) + state.get("component_files", [])
+        store_phase_mem0(user_id, project_dir, phase=3, summary=f"{len(_all_p3)} files generated")
+    except Exception:
+        pass
+    # T-P4-06: Write validation results to disk so Phase 4 can incorporate them into retry patch plan
+    try:
+        import json as _json_p3v  # noqa: PLC0415
+        _val_dir = get_phase_dir(project_dir, 3)
+        _val_path = _val_dir / "phase-3-validation.json"
+        _val_path.write_text(_json_p3v.dumps(state.get("validation_results", {}), indent=2, default=str))
+    except Exception:
+        pass
     return {
         "status": "complete",
         "outputs_saved": state.get("outputs_saved", []),

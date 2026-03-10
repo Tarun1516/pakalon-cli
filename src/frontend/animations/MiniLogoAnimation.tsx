@@ -532,6 +532,12 @@ export const MiniLogoAnimation: React.FC<MiniLogoProps> = ({
   const lastTimestampRef = useRef(Date.now());
   const isPlayingRef = useRef(autoPlay);
 
+  // Hide terminal cursor during animation to prevent flicker from cursor repositioning
+  useEffect(() => {
+    process.stdout.write('\x1b[?25l'); // hide cursor
+    return () => { process.stdout.write('\x1b[?25h'); }; // restore on unmount
+  }, []);
+
   // Select color theme based on background
   const theme = useMemo(() => hasDarkBackground ? THEME_DARK : THEME_LIGHT, [hasDarkBackground]);
   const defaultChalkFn = hasDarkBackground ? null : chalk.black; // null = terminal default (white on dark)
@@ -595,8 +601,9 @@ export const MiniLogoAnimation: React.FC<MiniLogoProps> = ({
   }, [isPlaying, frameIndex, loop]);
 
   // Render: 24 pre-built ANSI strings instead of 1920 individual Text nodes
+  // width={80} prevents Ink from recalculating layout on every frame (key flicker fix)
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" width={80}>
       {precomputedRows[frameIndex].map((line, i) => (
         <Text key={i}>{line}</Text>
       ))}

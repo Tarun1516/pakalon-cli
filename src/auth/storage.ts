@@ -11,6 +11,9 @@ export interface StoredCredentials {
   userId: string;
   plan: string;
   githubLogin?: string;
+  displayName?: string;
+  trialDaysRemaining?: number | null;
+  billingDaysRemaining?: number | null;
   storedAt: string; // ISO timestamp
 }
 

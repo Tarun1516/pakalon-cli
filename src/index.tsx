@@ -9,7 +9,8 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import App from "@/app.js";
 import BuildScreen from "@/components/screens/BuildScreen.js";
-import { runDeviceAuth, logout } from "@/auth/device-flow.js";
+import SplashLoginScreen from "@/frontend/screens/SplashLoginScreen.js";
+import { logout } from "@/auth/device-flow.js";
 import { isAuthenticated } from "@/auth/storage.js";
 import { cmdListModels, cmdSetModel, formatModelsTable } from "@/commands/model.js";
 import { cmdGeneratePrint } from "@/commands/generate.js";
@@ -53,9 +54,9 @@ async function main() {
           .option("agent", { alias: "a", type: "boolean", describe: "Start in agent mode" })
           .option("dir", { alias: "d", type: "string", describe: "Project directory" })
           .option("no-banner", { type: "boolean", describe: "Hide the banner" })
-          .option("permission-mode", { type: "string", choices: ["plan", "edit", "auto-accept", "bypass"] as const, describe: "Permission mode: plan (read-only), edit (confirm each), auto-accept, bypass (YOLO)" })
+          .option("permission-mode", { type: "string", choices: ["plan", "normal", "auto-accept", "orchestration", "edit", "bypass"] as const, describe: "Permission mode: plan, normal (ask first), auto-accept, orchestration (Q&A only)" })
           .option("plan", { type: "boolean", describe: "Start in plan (read-only) mode" })
-          .option("edit", { type: "boolean", describe: "Start in edit mode (confirm each file change)" })
+          .option("edit", { type: "boolean", describe: "Start in normal mode (ask before actions)" })
           .option("auto-accept", { type: "boolean", describe: "Start in auto-accept mode" })
           .option("bypass-permissions", { type: "boolean", describe: "Start in bypass mode (YOLO — no confirmations)" })
           .option("model", { alias: "m", type: "string", describe: "Model to use" })
@@ -194,10 +195,10 @@ async function main() {
             permissionMode: (
               isTeammateMode ? "plan" :
               args["plan"] ? "plan" :
-              args["edit"] ? "edit" :
+              args["edit"] ? "normal" :
               args["auto-accept"] ? "auto-accept" :
-              args["bypass-permissions"] ? "bypass" :
-              args["permission-mode"] as "plan" | "edit" | "auto-accept" | "bypass" | undefined
+              args["bypass-permissions"] ? "auto-accept" :
+              args["permission-mode"] as "plan" | "normal" | "auto-accept" | "orchestration" | "edit" | "bypass" | undefined
             ),
             modelOverride: args.model,
             defaultModel: args.defaultModel,
@@ -229,23 +230,22 @@ async function main() {
       }
     )
     .command("login", "Authenticate with GitHub via device code", {}, async () => {
-      console.log("Opening browser for GitHub authentication…");
-      try {
-        await runDeviceAuth(
-          (result) => {
-            console.log(`\n→ Visit: ${result.loginUrl}`);
-            console.log(`→ Enter code: ${result.code}\n`);
-          },
-          (attempt) => {
-            process.stdout.write(`\rWaiting for confirmation... (attempt ${attempt})   `);
-          }
+      let unmountFn: (() => void) | undefined;
+
+      await new Promise<void>((resolve, reject) => {
+        const { unmount, waitUntilExit } = render(
+          React.createElement(SplashLoginScreen, {
+            showAnimation: false,
+            onAuthenticated: () => {
+              unmountFn?.();
+              resolve();
+            },
+          })
         );
-        console.log("\n✓ Authenticated successfully!");
-        process.exit(EXIT_SUCCESS);
-      } catch (err) {
-        console.error(`\nAuth failed: ${err instanceof Error ? err.message : String(err)}`);
-        process.exit(EXIT_AUTH_ERROR);
-      }
+        unmountFn = unmount;
+        waitUntilExit().catch(reject);
+      });
+      process.exit(EXIT_SUCCESS);
     })
     .command("logout", "Log out and clear credentials", {}, async () => {
       await logout();

@@ -16,7 +16,9 @@ export interface AuthState {
   plan: "free" | "pro" | "enterprise";
   isLoggedIn: boolean;
   githubLogin: string | null;
+  displayName: string | null;
   trialDaysRemaining: number | null;
+  billingDaysRemaining: number | null;
   /** True after the user has successfully logged in at least once on this machine */
   hasEverLoggedIn: boolean;
   // Actions
@@ -25,7 +27,15 @@ export interface AuthState {
   restoreSession: () => boolean;
   setPlan: (plan: "free" | "pro" | "enterprise") => void;
   setTrialDaysRemaining: (days: number) => void;
+  setBillingDaysRemaining: (days: number | null) => void;
   markLaunched: () => void;
+  syncProfile: (profile: {
+    plan?: "free" | "pro" | "enterprise";
+    githubLogin?: string | null;
+    displayName?: string | null;
+    trialDaysRemaining?: number | null;
+    billingDaysRemaining?: number | null;
+  }) => void;
 }
 
 export const createAuthSlice: StateCreator<
@@ -39,7 +49,9 @@ export const createAuthSlice: StateCreator<
   plan: "free",
   isLoggedIn: false,
   githubLogin: null,
+  displayName: null,
   trialDaysRemaining: null,
+  billingDaysRemaining: null,
   hasEverLoggedIn: false,
 
   login: (creds) => {
@@ -50,6 +62,9 @@ export const createAuthSlice: StateCreator<
       plan: (creds.plan as AuthState["plan"]) ?? "free",
       isLoggedIn: true,
       githubLogin: creds.githubLogin ?? null,
+      displayName: creds.displayName ?? null,
+      trialDaysRemaining: creds.trialDaysRemaining ?? null,
+      billingDaysRemaining: creds.billingDaysRemaining ?? null,
       hasEverLoggedIn: true,
     });
   },
@@ -62,7 +77,9 @@ export const createAuthSlice: StateCreator<
       plan: "free",
       isLoggedIn: false,
       githubLogin: null,
+      displayName: null,
       trialDaysRemaining: null,
+      billingDaysRemaining: null,
     });
   },
 
@@ -76,11 +93,40 @@ export const createAuthSlice: StateCreator<
       plan: (creds.plan as AuthState["plan"]) ?? "free",
       isLoggedIn: true,
       githubLogin: creds.githubLogin ?? null,
+      displayName: creds.displayName ?? null,
+      trialDaysRemaining: creds.trialDaysRemaining ?? null,
+      billingDaysRemaining: creds.billingDaysRemaining ?? null,
     });
     return true;
   },
 
   setPlan: (plan) => set({ plan }),
   setTrialDaysRemaining: (days) => set({ trialDaysRemaining: days }),
+  setBillingDaysRemaining: (days) => set({ billingDaysRemaining: days }),
   markLaunched: () => set({ hasEverLoggedIn: true }),
+  syncProfile: (profile) => {
+    set((state) => {
+      const nextState = {
+        plan: profile.plan ?? state.plan,
+        githubLogin: profile.githubLogin ?? state.githubLogin,
+        displayName: profile.displayName ?? state.displayName,
+        trialDaysRemaining: profile.trialDaysRemaining ?? state.trialDaysRemaining,
+        billingDaysRemaining: profile.billingDaysRemaining ?? state.billingDaysRemaining,
+      };
+
+      const stored = loadCredentials();
+      if (stored) {
+        saveCredentials({
+          ...stored,
+          plan: nextState.plan,
+          githubLogin: nextState.githubLogin ?? undefined,
+          displayName: nextState.displayName ?? undefined,
+          trialDaysRemaining: nextState.trialDaysRemaining,
+          billingDaysRemaining: nextState.billingDaysRemaining,
+        });
+      }
+
+      return nextState;
+    });
+  },
 });

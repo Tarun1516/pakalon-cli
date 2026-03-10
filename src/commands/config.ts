@@ -23,7 +23,7 @@ export interface PakalonSettings {
   // General
   defaultModel?: string;
   fallbackModel?: string;
-  permissionMode?: "plan" | "edit" | "auto-accept" | "bypass";
+  permissionMode?: "plan" | "normal" | "auto-accept" | "orchestration" | "edit" | "bypass";
   verbose?: boolean;
   disableSlashCommands?: boolean;
   maxBudgetUsd?: number;

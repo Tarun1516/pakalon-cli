@@ -3,29 +3,18 @@
  *
  * Stack from top to bottom:
  *   ┌──────────────────────────────────────────────┐
- *   │  HeaderBar (logo + user + model + ctx + credits) │
+ *   │  HeaderBar (single logo + identity card)         │
  *   ├──────────────────────────────────────────────┤
- *   │  LogoStatic animation (plays once on mount)  │
- *   │            (hidden after 3.5s)               │
+ *   │  ContextBar (context window progress)        │
  *   ├──────────────────────────────────────────────┤
  *   │  ChatScreen (full chat UI — messages + input) │
- *   ├──────────────────────────────────────────────┤
- *   │  FileChangeSummary (lines added / deleted)   │
  *   └──────────────────────────────────────────────┘
  */
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { Box } from "ink";
 import HeaderBar from "@/frontend/components/HeaderBar.js";
-import FileChangeSummary from "@/frontend/components/FileChangeSummary.js";
+import ContextBar from "@/components/ui/ContextBar.js";
 import ChatScreen from "@/components/screens/ChatScreen.js";
-
-import LogoStaticImport from "@/frontend/animations/LogoStatic.js";
-
-// Load LogoStatic lazily — it depends on the asset import chain
-const LogoStaticComponent: React.ComponentType<{
-  hasDarkBackground?: boolean;
-  static?: boolean;
-}> | null = LogoStaticImport ?? null;
 
 interface ChatLayoutProps {
   initialMessage?: string;
@@ -48,8 +37,6 @@ interface ChatLayoutProps {
   memoryBlock?: string;
 }
 
-const LOGO_ANIM_DURATION_MS = 3500; // Show animated logo for 3.5s then hide
-
 const ChatLayout: React.FC<ChatLayoutProps> = ({
   initialMessage,
   projectDir,
@@ -68,28 +55,11 @@ const ChatLayout: React.FC<ChatLayoutProps> = ({
   playLogoAnimation = false,
   memoryBlock = "",
 }) => {
-  const [showLogoAnim, setShowLogoAnim] = useState(playLogoAnimation);
-
-  // Auto-hide logo animation after its duration
-  useEffect(() => {
-    if (!playLogoAnimation) return;
-    const t = setTimeout(() => setShowLogoAnim(false), LOGO_ANIM_DURATION_MS);
-    return () => clearTimeout(t);
-  }, [playLogoAnimation]);
-
   return (
     <Box flexDirection="column" width="100%">
-      {/* ── Top: persistent header ───────────────────────────────────── */}
       <HeaderBar showLogo />
+      <ContextBar projectDir={projectDir} />
 
-      {/* ── Logo animation (shown only once per session on first login) ── */}
-      {showLogoAnim && LogoStaticComponent && (
-        <Box justifyContent="center" marginY={1}>
-          <LogoStaticComponent hasDarkBackground />
-        </Box>
-      )}
-
-      {/* ── Chat area (fills remaining vertical space) ─────────────── */}
       <Box flexGrow={1} flexDirection="column">
         <ChatScreen
           initialMessage={initialMessage}
@@ -108,25 +78,7 @@ const ChatLayout: React.FC<ChatLayoutProps> = ({
           systemPrompt={systemPrompt}
           memoryBlock={memoryBlock}
         />
-          initialMessage={initialMessage}
-          projectDir={projectDir}
-          showBanner={showBanner}
-          modelOverride={modelOverride}
-          defaultModel={defaultModel}
-          fallbackModel={fallbackModel}
-          addDirs={addDirs}
-          allowedTools={allowedTools}
-          mcpServers={mcpServers}
-          replayMessages={replayMessages}
-          fileContexts={fileContexts}
-          maxBudgetUsd={maxBudgetUsd}
-          disableSlashCommands={disableSlashCommands}
-          systemPrompt={systemPrompt}
-        />
       </Box>
-
-      {/* ── Bottom: file change stats ──────────────────────────────── */}
-      <FileChangeSummary />
     </Box>
   );
 };

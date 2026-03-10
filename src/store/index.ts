@@ -1,8 +1,12 @@
 /**
  * Zustand store — combines all slices into a single app store.
  */
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
 import { useShallow } from "zustand/shallow";
 
 import { createAuthSlice, type AuthState } from "@/store/slices/auth.slice.js";
@@ -23,6 +27,47 @@ export type AppStore = AuthState &
   FileChangesState &
   TodoState;
 
+function getPersistDir(): string {
+  const base =
+    process.env.PAKALON_CONFIG_DIR ||
+    (process.platform === "win32"
+      ? path.join(process.env.APPDATA || os.homedir(), "pakalon")
+      : path.join(os.homedir(), ".config", "pakalon"));
+  if (!fs.existsSync(base)) {
+    fs.mkdirSync(base, { recursive: true, mode: 0o700 });
+  }
+  return base;
+}
+
+const filePersistStorage: StateStorage = {
+  getItem: (name) => {
+    try {
+      const filePath = path.join(getPersistDir(), `${name}.json`);
+      return fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf8") : null;
+    } catch {
+      return null;
+    }
+  },
+  setItem: (name, value) => {
+    try {
+      const filePath = path.join(getPersistDir(), `${name}.json`);
+      fs.writeFileSync(filePath, value, { encoding: "utf8", mode: 0o600 });
+    } catch {
+      // Best-effort persistence only; auth credentials are still stored separately.
+    }
+  },
+  removeItem: (name) => {
+    try {
+      const filePath = path.join(getPersistDir(), `${name}.json`);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    } catch {
+      // Ignore cleanup failures.
+    }
+  },
+};
+
 export const useStore = create<AppStore>()(
   persist(
     (...args) => ({
@@ -37,6 +82,7 @@ export const useStore = create<AppStore>()(
     }),
     {
       name: "pakalon-store",
+      storage: createJSONStorage(() => filePersistStorage),
       // Only persist auth-related fields
       partialize: (state) => ({
         token: state.token,
@@ -44,6 +90,9 @@ export const useStore = create<AppStore>()(
         plan: state.plan,
         isLoggedIn: state.isLoggedIn,
         githubLogin: state.githubLogin,
+        displayName: state.displayName,
+        trialDaysRemaining: state.trialDaysRemaining,
+        billingDaysRemaining: state.billingDaysRemaining,
         selectedModel: state.selectedModel,
         hasEverLoggedIn: state.hasEverLoggedIn,
       }),
@@ -59,10 +108,13 @@ export const useAuth = () =>
     plan: s.plan,
     isLoggedIn: s.isLoggedIn,
     githubLogin: s.githubLogin,
+    displayName: s.displayName,
     trialDaysRemaining: s.trialDaysRemaining,
+    billingDaysRemaining: s.billingDaysRemaining,
     hasEverLoggedIn: s.hasEverLoggedIn,
     login: s.login,
     logout: s.logout,
+    syncProfile: s.syncProfile,
     restoreSession: s.restoreSession,
     markLaunched: s.markLaunched,
   })));

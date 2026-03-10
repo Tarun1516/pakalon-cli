@@ -164,6 +164,56 @@ AVAILABLE_SKILLS = {
         "file": "composition-patterns.md",
         "category": "patterns",
     },
+    # ── Anthropic skills (T-RAG-07/09-13) ─────────────────────────────────
+    "docx": {
+        "name": "docx",
+        "description": "Create, edit, and modify .docx Word documents with formatting, tables, images, and styles",
+        "file": "docx.md",
+        "category": "documents",
+    },
+    "pdf": {
+        "name": "pdf",
+        "description": "Read, extract, merge, split, create, watermark, fill forms, and OCR scan PDF files",
+        "file": "pdf.md",
+        "category": "documents",
+    },
+    "pptx": {
+        "name": "pptx",
+        "description": "Create/modify PowerPoint presentations with slides, layouts, speaker notes, and charts",
+        "file": "pptx.md",
+        "category": "documents",
+    },
+    "xlsx": {
+        "name": "xlsx",
+        "description": "Create/modify Excel files with formulas, charts, pivot tables, and data validation",
+        "file": "xlsx.md",
+        "category": "documents",
+    },
+    "mcp-builder": {
+        "name": "mcp-builder",
+        "description": "Generate Model Context Protocol servers from specifications or OpenAPI definitions",
+        "file": "mcp-builder.md",
+        "category": "mcp",
+    },
+    "webapp-testing": {
+        "name": "webapp-testing",
+        "description": "Write and run browser-based E2E, visual regression, and accessibility tests with Playwright",
+        "file": "webapp-testing.md",
+        "category": "testing",
+    },
+    # ── Vercel skills (T-RAG-08/20) ───────────────────────────────────────
+    "vercel-deploy-claimable": {
+        "name": "vercel-deploy-claimable",
+        "description": "Deploy applications to Vercel with claimable preview URLs and project creation",
+        "file": "vercel-deploy-claimable.md",
+        "category": "deployment",
+    },
+    "react-native-guidelines": {
+        "name": "react-native-guidelines",
+        "description": "React Native best practices for mobile application development",
+        "file": "react-native-skills.md",
+        "category": "mobile",
+    },
 }
 
 
@@ -237,7 +287,7 @@ def get_frontend_skills() -> dict[str, str]:
     frontend_skills = {}
     # Local bundled skills
     for name, info in AVAILABLE_SKILLS.items():
-        if info.get("category") in ["frontend", "patterns"]:
+        if info.get("category") in ["frontend", "patterns", "testing", "deployment"]:
             content = load_skill(name)
             if content:
                 frontend_skills[name] = content

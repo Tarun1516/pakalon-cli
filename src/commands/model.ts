@@ -5,37 +5,49 @@ import { getApiClient } from "@/api/client.js";
 import { useStore } from "@/store/index.js";
 
 export interface ModelInfo {
-  model_id: string;
+  id?: string;
+  model_id?: string;
   name: string;
   tier: string;
-  context_length: number;
+  context_length?: number;
+  context_window?: number;
+  pricing_tier?: string;
   remaining_pct?: number | null;   // T-CLI-15: added by backend /models endpoint
+}
+
+function normalizeModel(model: ModelInfo) {
+  return {
+    ...model,
+    id: model.id ?? model.model_id ?? "",
+    context_length: model.context_length ?? model.context_window ?? 0,
+    tier: model.tier || (model.pricing_tier === "free" ? "free" : "paid"),
+  };
 }
 
 export async function cmdListModels(): Promise<ModelInfo[]> {
   const client = getApiClient();
-  const res = await client.get<{ models: ModelInfo[] }>("/models");
-  return res.data.models ?? [];
+  const res = await client.get<{ models: ModelInfo[] }>("/models?include_all=true");
+  return (res.data.models ?? []).map(normalizeModel).filter((model) => Boolean(model.id));
 }
 
 export async function cmdSetModel(modelId: string): Promise<void> {
   const models = await cmdListModels();
-  const found = models.find((m) => m.model_id === modelId || m.name.toLowerCase().includes(modelId.toLowerCase()));
+  const found = models.find((m) => m.id === modelId || m.name.toLowerCase().includes(modelId.toLowerCase()));
   if (!found) {
     throw new Error(`Model not found: ${modelId}. Run with 'list' to see available models.`);
   }
-  useStore.getState().setSelectedModel(found.model_id);
+  useStore.getState().setSelectedModel(found.id!);
 }
 
 export async function cmdAutoModel(): Promise<ModelInfo | null> {
   const client = getApiClient();
   try {
     const res = await client.get<ModelInfo>("/models/auto");
-    const model = res.data;
+    const model = normalizeModel(res.data);
     useStore.getState().setAutoModel({
-      id: model.model_id,
+      id: model.id!,
       name: model.name,
-      contextLength: model.context_length,
+      contextLength: model.context_length ?? 0,
       tier: (model.tier === "free" || model.tier === "paid") ? model.tier : "free",
     });
     return model;
@@ -56,7 +68,7 @@ export function formatModelsTable(models: ModelInfo[]): string {
   ];
 
   for (const m of models) {
-    const id = m.model_id.slice(0, 32).padEnd(34);
+    const id = (m.id ?? "").slice(0, 32).padEnd(34);
     const tier = (m.tier ?? "").padEnd(6);
     const ctx = String(m.context_length ?? "").padEnd(8);
     const pct =

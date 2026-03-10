@@ -19,6 +19,7 @@
 import fs from "fs";
 import { loadCredentials } from "@/auth/storage.js";
 import { handleStream } from "@/ai/stream.js";
+import { DEFAULT_FREE_MODEL_ID } from "@/constants/models.js";
 import { estimateTokens } from "@/utils/cost-estimate.js";
 import logger from "@/utils/logger.js";
 import type { ModelMessage as CoreMessage } from "ai";
@@ -103,7 +104,7 @@ export async function runPrintMode(opts: PrintModeOptions): Promise<void> {
   let chunkIndex = 0;
 
   await handleStream({
-    model: opts.model ?? "openai/gpt-4o-mini",
+    model: opts.model ?? DEFAULT_FREE_MODEL_ID,
     messages,
     system: systemPrompt,
     privacyMode: opts.privacyMode ?? false,

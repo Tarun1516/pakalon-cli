@@ -2,8 +2,7 @@
  * InputBar — user text input with slash-command detection and @agent autocomplete.
  *
  * Keyboard shortcuts:
- *   Tab        → cycle permission mode: plan → edit → auto-accept → bypass (T-CLI-18)
- *   Shift+Tab  → toggle extended thinking on/off (T-CLI-19)
+ *   Shift+Tab  → cycle visible interaction mode
  *   Ctrl+O     → toggle verbose panel (T164)
  *   Enter      → submit
  *
@@ -14,7 +13,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Box, Text, useInput } from "ink";
 import TextInput from "ink-text-input";
-import SelectInput from "ink-select-input";
 import { useStore } from "@/store/index.js";
 import type { PermissionMode } from "@/store/slices/mode.slice.js";
 import { readdirSync, statSync } from "fs";
@@ -68,6 +66,7 @@ function scanFiles(dir: string, base: string, results: string[], depth = 0): voi
       try {
         const stat = statSync(full);
         if (stat.isDirectory()) {
+          results.push(`${relative(base, full).replace(/\\/g, "/")}/`);
           scanFiles(full, base, results, depth + 1);
         } else if (FILE_EXTS.has(extname(entry).toLowerCase())) {
           results.push(relative(base, full).replace(/\\/g, "/"));
@@ -137,85 +136,31 @@ interface InputBarProps {
   historyItems?: string[] | undefined;
 }
 
-const SLASH_COMMANDS = [
-  "/model",
-  "/cost",
-  "/doctor",
-  "/memory",
-  "/terminal-setup",
-  "/install-github-app",
-  "/statusline",
-  "/vim",
-  "/ide",
-  "/fake-pakalon",
-  "/clear",
-  "/agent",
-  "/chat",
-  "/headless",
-  "/context",
-  "/session",
-  "/new",
-  "/history",
-  "/agents",
-  "/mcp",
-  "/plugins",
-  "/workflows",
-  "/directory",
-  "/logout",
-  "/upgrade",
-  "/status",
-  "/update",
-  "/undo",
-  "/rewind",
-  "/plan",
-  "/build",
-  "/web",
-  "/analyze-image",
-  "/analyze-video",
-  "/generate",
-  "/enterprise",
-  "/help",
-  "/compact",
-  "/exit",
-  "/resume",
-  "/sessions",
-  "/penpot",
-  "/auditor",
-  "/search",
-  "/diff",
-  "/security-review",
-  "/output-style",
-  "/insights",
-  "/explore",
-  "/git",
-  "/explain",
-  "/refactor",
-  "/review",
-  "/test-gen",
-  "/fix-lint",
-  "/find-usages",
-  "/docstring",
-  "/error-help",
-  "/grep",
-  "/files",
-  "/clean",
-  "/goto",
-  "/find-symbol",
-  "/permissions",
-  "/hooks",
-  "/fork",
-  "/export",
-  "/init",
-  "/pakalon",
-  "/workflows",
-  "/autocompact",
-  "/keybindings",
-  "/theme",
-  "/sandbox",
-  "/mobile",
-  "/desktop",
-  "/chrome",
-  "/pr-comments",
+interface CommandSuggestion {
+  label: string;
+  insertValue: string;
+  description: string;
+}
+
+const COMMAND_SUGGESTIONS: CommandSuggestion[] = [
+  { label: "/init", insertValue: "/init", description: "Initialize Pakalon workspace files" },
+  { label: "/pakalon", insertValue: "/pakalon ", description: "Start the Pakalon pipeline" },
+  { label: "/plugins", insertValue: "/plugins", description: "Manage installed plugins" },
+  { label: "/models", insertValue: "/models", description: "List models available for your plan" },
+  { label: "/workflows", insertValue: "/workflows", description: "Create and run workflows" },
+  { label: "/directory", insertValue: "/directory", description: "Show the current project tree" },
+  { label: "/agents", insertValue: "/agents", description: "Manage saved agents" },
+  { label: "/web", insertValue: "/web ", description: "Analyze a web page or browse the web" },
+  { label: "/history", insertValue: "/history", description: "Show recent conversation history" },
+  { label: "/session", insertValue: "/session", description: "Show available chat sessions" },
+  { label: "/new", insertValue: "/new", description: "Start a brand new chat session" },
+  { label: "/resume", insertValue: "/resume ", description: "Resume a previous session" },
+  { label: "/resume<session_id>", insertValue: "/resume ", description: "Resume a specific session id" },
+  { label: "/agents", insertValue: "/agents", description: "Manage saved agents" },
+  { label: "/update", insertValue: "/update ", description: "Apply an update task to the codebase" },
+  { label: "/penpot", insertValue: "/penpot", description: "Open the Penpot design workflow" },
+  { label: "/agent", insertValue: "/agent", description: "Switch to agent mode" },
+  { label: "/automations", insertValue: "/automations", description: "Manage automations and connectors" },
 ];
 
 // T-MCP-08: Append MCP prompt commands (e.g. "/mcp__context7__") dynamically at runtime.
@@ -223,16 +168,21 @@ const SLASH_COMMANDS = [
 function getAllSlashCommands(): string[] {
   try {
     const mcpPrompts = getMcpPromptCommands();
-    if (mcpPrompts.length > 0) return [...SLASH_COMMANDS, ...mcpPrompts];
+    const commands = COMMAND_SUGGESTIONS
+      .filter((item) => item.label.startsWith("/"))
+      .map((item) => item.insertValue.trimEnd());
+    if (mcpPrompts.length > 0) return [...commands, ...mcpPrompts];
   } catch { /* ignore */ }
-  return SLASH_COMMANDS;
+  return COMMAND_SUGGESTIONS
+    .filter((item) => item.label.startsWith("/"))
+    .map((item) => item.insertValue.trimEnd());
 }
 
 const PERMISSION_MODE_COLORS: Record<PermissionMode, string> = {
   plan: "blue",
-  edit: "yellow",
   "auto-accept": "green",
-  bypass: "red",
+  orchestration: "yellow",
+  normal: "white",
 };
 
 // T-CLI-P9: Rich dropdown item — includes description for agent suggestions
@@ -244,9 +194,12 @@ interface RichSelectItem {
   agentColor?: string;
 }
 
+const PAKALON_ACCENT_COLOR = "#f59e0b";
+
 const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode, projectDir, historyItems }) => {
   const [value, setValue] = useState("");
   const [atItems, setAtItems] = useState<RichSelectItem[]>([]);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
   // T-CLI-80: Vim mode state — "normal" waits for commands, "insert" allows typing
   const [vimEditMode, setVimEditMode] = useState<"normal" | "insert" | "visual">("insert");
   const [cursorPos, setCursorPos] = useState(0);
@@ -258,18 +211,69 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode
   const pendingMotionRef = useRef<string>(""); // accumulated multi-key sequence
   const visualAnchorRef = useRef<number>(0);   // visual mode selection anchor
 
-  // T-CLI-57: Ghost text — pick first history entry that starts with current value
+  const slashItems = React.useMemo(() => {
+    if (!value.startsWith("/")) return [] as CommandSuggestion[];
+    const query = value.slice(1).trim().toLowerCase();
+    const commandItems = COMMAND_SUGGESTIONS.filter((item) => item.label.startsWith("/"));
+    if (!query) return commandItems;
+
+    const startsWith = commandItems.filter((item) => item.label.slice(1).toLowerCase().startsWith(query));
+    const includes = commandItems.filter(
+      (item) => !startsWith.includes(item) && item.label.slice(1).toLowerCase().includes(query)
+    );
+    return [...startsWith, ...includes];
+  }, [value]);
+
+  const visibleSuggestions = React.useMemo<RichSelectItem[]>(() => {
+    if (atItems.length > 0) return atItems;
+    return slashItems.slice(0, 10).map((item) => ({
+      label: item.label,
+      value: item.insertValue,
+      description: item.description,
+      agentColor: "cyan",
+    }));
+  }, [atItems, slashItems]);
+
+  // T-CLI-57: Ghost text — prefer slash command completion, otherwise use prompt history.
   const ghostSuggestion = React.useMemo(() => {
+    if (value.startsWith("/")) {
+      const bestMatch = slashItems[0];
+      if (!bestMatch) return "";
+      const target = bestMatch.insertValue;
+      return target.toLowerCase().startsWith(value.toLowerCase()) ? target.slice(value.length) : "";
+    }
+
     if (!historyItems || value.length < 2) return "";
     const lv = value.toLowerCase();
     const match = historyItems.find((h) => h.toLowerCase().startsWith(lv) && h.length > value.length);
     return match ? match.slice(value.length) : "";
-  }, [value, historyItems]);
+  }, [value, historyItems, slashItems]);
   const permissionMode = useStore((s) => s.permissionMode);
-  const thinkingEnabled = useStore((s) => s.thinkingEnabled);
   const cyclePermissionMode = useStore((s) => s.cyclePermissionMode);
-  const toggleThinking = useStore((s) => s.toggleThinking);
   const toggleVerbose = useStore((s) => s.toggleVerbose);
+
+  useEffect(() => {
+    setSelectedSuggestionIndex(0);
+  }, [value, atItems, slashItems]);
+
+  const applySuggestion = (item: RichSelectItem) => {
+    if (atItems.length > 0) {
+      handleAtSelect(item);
+      return;
+    }
+
+    setValue(item.value);
+  };
+
+  const submitCurrentValue = React.useCallback((nextValue?: string) => {
+    const finalValue = (nextValue ?? value).trim();
+    if (!finalValue || isDisabled) return;
+    setAtItems([]);
+    onSubmit(finalValue);
+    setValue("");
+    setCursorPos(0);
+    if (vimMode) setVimEditMode("normal");
+  }, [isDisabled, onSubmit, value, vimMode]);
 
   // Sync cursorPos with value length when value changes externally
   useEffect(() => {
@@ -318,7 +322,7 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode
         )
         .slice(0, 8)
         .map((r) => ({
-          label: `🔗 @${r.server}:${r.uri}${r.description ? `  ${r.description.slice(0, 35)}` : ""}`,
+          label: `@${r.server}:${r.uri}${r.description ? `  ${r.description.slice(0, 35)}` : ""}`,
           value: `@${r.server}:${r.uri}`,
           description: r.description,
           agentColor: "magenta" as string,
@@ -352,7 +356,7 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode
           .filter((f) => f.toLowerCase().includes(query.toLowerCase()))
           .slice(0, 6)
           .map((f) => ({
-            label: `📄 ${f}`,
+            label: f.endsWith("/") ? `${f}  folder` : `${f}  file`,
             value: `@${f}`,
             description: undefined,
             agentColor: "white",
@@ -368,7 +372,7 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode
       .filter((s) => query === "" || s.toLowerCase().startsWith(query))
       .slice(0, 3)
       .map((s) => ({
-        label: `🔗 @${s}:  (MCP resource)`,
+        label: `@${s}:  MCP resource`,
         value: `@${s}:`,
         description: "MCP resource reference",
         agentColor: "magenta" as string,
@@ -378,10 +382,35 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode
     setAtItems(combined);
   }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // T-CLI-18: Tab → cycle permission mode; T-CLI-19: Shift+Tab → toggle thinking; T164: Ctrl+O → verbose
+  // Shift+Tab → cycle permission mode; T164: Ctrl+O → verbose
   useInput(
     (_input, key) => {
       if (isDisabled) return;
+
+      if (visibleSuggestions.length > 0) {
+        if (key.downArrow) {
+          setSelectedSuggestionIndex((current) => (current + 1) % visibleSuggestions.length);
+          return;
+        }
+        if (key.upArrow) {
+          setSelectedSuggestionIndex((current) => (current - 1 + visibleSuggestions.length) % visibleSuggestions.length);
+          return;
+        }
+        if (_input === " ") {
+          applySuggestion(visibleSuggestions[selectedSuggestionIndex]!);
+          return;
+        }
+        if (key.return) {
+          const selectedSuggestion = visibleSuggestions[selectedSuggestionIndex]!;
+          if (atItems.length > 0) {
+            applySuggestion(selectedSuggestion);
+            return;
+          }
+
+          submitCurrentValue(selectedSuggestion.value);
+          return;
+        }
+      }
 
       // T-CLI-80: Vim normal mode — full key handling: motions, text objects, undo, yank, paste
       if (vimMode && vimEditMode === "normal") {
@@ -616,12 +645,8 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode
         // All other keys handled by TextInput below
       }
 
-      if (key.tab && !key.shift) {
-        cyclePermissionMode();
-        return;
-      }
       if (key.tab && key.shift) {
-        toggleThinking();
+        cyclePermissionMode();
         return;
       }
       if (key.ctrl && _input === "o") {
@@ -637,22 +662,11 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode
   );
 
   const handleVimSubmit = () => {
-    if (!value.trim() || isDisabled) return;
-    setAtItems([]);
-    onSubmit(value.trim());
-    setValue("");
-    setCursorPos(0);
-    if (vimMode) setVimEditMode("normal");
+    submitCurrentValue();
   };
 
   const handleSubmit = (val: string) => {
-    if (!val.trim() || isDisabled) return;
-    // Clear autocomplete
-    setAtItems([]);
-    onSubmit(val.trim());
-    setValue("");
-    setCursorPos(0);
-    if (vimMode) setVimEditMode("normal");
+    submitCurrentValue(val);
   };
 
   const handleAtSelect = (item: { label: string; value: string }) => {
@@ -667,15 +681,6 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode
     setAtItems([]);
   };
 
-  const cmdPart = value.split(" ")[0] ?? "";
-  const _allSlashCmds = getAllSlashCommands();
-  const hint =
-    value.startsWith("/") && !_allSlashCmds.includes(cmdPart)
-      ? _allSlashCmds.filter((cmd) => cmd.startsWith(cmdPart)).join("  ") || ""
-      : "";
-
-  // Use prop mode label if provided (e.g. "agent"), otherwise show permissionMode
-  const displayMode = mode ?? permissionMode;
   const modeColor =
     mode
       ? isDisabled ? "gray" : "cyan"
@@ -684,6 +689,8 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode
   // T-CLI-80: vim mode indicator color
   const vimIndicatorColor =
     vimEditMode === "normal" ? "yellow" : vimEditMode === "visual" ? "magenta" : "green";
+
+  const horizontalRule = "─".repeat(Math.max(24, (process.stdout.columns ?? 80) - 2));
 
   // T-CLI-80: In vim normal mode, render cursor as highlighted character
   const renderVimNormalInput = () => {
@@ -718,36 +725,38 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode
   };
 
   return (
-    <Box flexDirection="column" borderStyle="round" paddingX={1} borderColor={isDisabled ? "gray" : "blue"}>
+    <Box flexDirection="column">
       {/* T-CLI-P9: @mention autocomplete dropdown — shows name + description */}
       {atItems.length > 0 && (
         <Box flexDirection="column" borderStyle="single" borderColor="cyan" paddingX={1}>
-          <Text dimColor>🤖 Agents — Tab to select, Enter to confirm</Text>
-          {atItems.map((item) => (
+          <Text dimColor>Suggestions — ↑/↓ move, Space selects, Enter confirms</Text>
+          {atItems.map((item, index) => (
             <Box key={item.value} gap={1}>
-              <Text color={item.agentColor ?? "cyan"} bold>{item.value}</Text>
+              <Text color={index === selectedSuggestionIndex ? PAKALON_ACCENT_COLOR : (item.agentColor ?? "cyan")} bold={index === selectedSuggestionIndex}>
+                {index === selectedSuggestionIndex ? "➜" : " "} {item.value}
+              </Text>
               {item.description ? (
-                <Text dimColor>{item.description.slice(0, 50)}</Text>
+                <Text color={index === selectedSuggestionIndex ? PAKALON_ACCENT_COLOR : undefined} dimColor={index !== selectedSuggestionIndex}>{item.description.slice(0, 50)}</Text>
               ) : null}
             </Box>
           ))}
-          <SelectInput items={atItems} onSelect={handleAtSelect} />
         </Box>
       )}
-      {hint ? <Text dimColor>{hint}</Text> : null}
-      {/* Mode + thinking + vim indicator */}
-      <Box gap={1}>
-        <Text color={modeColor} bold>[{displayMode.toUpperCase()}]</Text>
-        {thinkingEnabled && <Text color="magenta" dimColor>🧠 thinking</Text>}
-        {vimMode && (
-          <Text color={vimIndicatorColor} bold>[{vimEditMode.toUpperCase()}]</Text>
-        )}
-        {vimMode
-          ? <Text dimColor>Esc:normal  i/a:insert  hjklwbe:nav  dd/dw/ciw:edit  u:undo  yp:yank/paste  v:visual</Text>
-          : <Text dimColor>Tab:mode  ⇧Tab:think  ^O:verbose</Text>
-        }
-      </Box>
-      <Box gap={1}>
+      {slashItems.length > 0 && (
+        <Box flexDirection="column" borderStyle="single" borderColor="gray" paddingX={1}>
+          <Text dimColor>Commands — ↑/↓ move, Space selects, Enter confirms</Text>
+          {slashItems.slice(0, 10).map((item, index) => (
+            <Box key={item.label} gap={1}>
+              <Text color={index === selectedSuggestionIndex ? PAKALON_ACCENT_COLOR : "white"} bold={index === selectedSuggestionIndex}>
+                {index === selectedSuggestionIndex ? "➜" : " "} {item.label}
+              </Text>
+              <Text color={index === selectedSuggestionIndex ? PAKALON_ACCENT_COLOR : undefined} dimColor={index !== selectedSuggestionIndex}>{item.description}</Text>
+            </Box>
+          ))}
+        </Box>
+      )}
+      <Text color="white">{horizontalRule}</Text>
+      <Box gap={1} paddingX={1}>
         <Text color={isDisabled ? "gray" : modeColor}>›</Text>
         {isDisabled ? (
           <Text dimColor>waiting…</Text>
@@ -766,10 +775,11 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode
           />
         )}
       </Box>
-      {/* T-CLI-57: Ghost text suggestion — shown as dimmed suffix (→ or End to accept) */}
+      <Text color="white">{horizontalRule}</Text>
+      {/* T-CLI-57: Ghost text suggestion — shown as dimmed suffix (End accepts) */}
       {ghostSuggestion && !isDisabled && atItems.length === 0 && (
         <Box paddingLeft={2}>
-          <Text dimColor color="gray">{value}<Text color="cyan">{ghostSuggestion}</Text>  <Text dimColor>→ accept</Text></Text>
+          <Text dimColor color="gray">{value}<Text color="cyan">{ghostSuggestion}</Text>  <Text dimColor>End accepts</Text></Text>
         </Box>
       )}
     </Box>

@@ -21,17 +21,10 @@ const RISK_COLORS: Record<RiskLevel, string> = {
   critical: "magenta",
 };
 
-const RISK_ICONS: Record<RiskLevel, string> = {
-  low: "🟢",
-  medium: "🟡",
-  high: "🔴",
-  critical: "💀",
-};
-
 const CHOICES = [
-  { label: "✅  Allow once  — approve this single action", value: "once" },
-  { label: "✅✅ Allow session — approve all future actions of this type", value: "session" },
-  { label: "❌  Deny  — block this action", value: "deny" },
+  { label: "Allow once  — approve this single action", value: "once" },
+  { label: "Allow session — approve all future actions of this type", value: "session" },
+  { label: "Deny  — block this action", value: "deny" },
 ];
 
 const PermissionDialog = ({ onDismiss }: PermissionDialogProps) => {
@@ -54,7 +47,6 @@ const PermissionDialog = ({ onDismiss }: PermissionDialogProps) => {
 
   const risk = request.risk ?? "medium";
   const riskColor = RISK_COLORS[risk] ?? "yellow";
-  const riskIcon = RISK_ICONS[risk] ?? "⚠️";
 
   const handleSelect = (item: { value: string }) => {
     permissionGate.resolve(request.id, item.value as "once" | "session" | "deny");
@@ -72,7 +64,7 @@ const PermissionDialog = ({ onDismiss }: PermissionDialogProps) => {
     >
       {/* Header */}
       <Text bold color={riskColor}>
-        {riskIcon}  Permission Required
+        Permission Required
       </Text>
 
       <Box marginTop={1} flexDirection="column" gap={0}>

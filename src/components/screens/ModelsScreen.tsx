@@ -8,13 +8,27 @@ import { getApiClient } from "@/api/client.js";
 import { useStore } from "@/store/index.js";
 import { debugLog } from "@/utils/logger.js";
 
+const PAKALON_ACCENT_COLOR = "#f59e0b";
+
 interface ModelItem {
-  model_id: string;
+  id?: string;
+  model_id?: string;
   name: string;
-  context_window: number;
-  pricing_tier: "free" | "pro";
+  context_length?: number;
+  context_window?: number;
+  tier?: "free" | "paid" | string;
+  pricing_tier?: "free" | "pro" | string;
   remaining_pct?: number;
   provider?: string;
+}
+
+function normalizeModel(model: ModelItem): ModelItem {
+  return {
+    ...model,
+    id: model.id ?? model.model_id ?? "",
+    context_length: model.context_length ?? model.context_window ?? 0,
+    tier: model.tier ?? (model.pricing_tier === "free" ? "free" : "paid"),
+  };
 }
 
 type SortKey = "context" | "name" | "tier";
@@ -26,11 +40,11 @@ function ctxLabel(n: number): string {
 }
 
 function tierBadge(tier: string): string {
-  return tier === "pro" ? "[PRO]" : "[FREE]";
+  return tier === "free" ? "[FREE]" : "[PRO]";
 }
 
 function tierColor(tier: string): string {
-  return tier === "pro" ? "yellow" : "green";
+  return tier === "free" ? "green" : "yellow";
 }
 
 function remainingBar(pct: number): string {
@@ -46,22 +60,21 @@ interface ModelRowProps {
 }
 
 const ModelRow: React.FC<ModelRowProps> = ({ model, isSelected, index }) => {
-  const bg = isSelected ? "blue" : undefined;
-  const prefix = isSelected ? "❯ " : "  ";
+  const prefix = isSelected ? "➜ " : "  ";
   const pct = model.remaining_pct ?? 100;
   const barColor = pct < 15 ? "red" : pct < 40 ? "yellow" : "green";
 
   return (
-    <Box flexDirection="row" backgroundColor={bg as never}>
-      <Text color={isSelected ? "white" : "gray"}>{prefix}</Text>
-      <Text color={tierColor(model.pricing_tier)} bold={model.pricing_tier === "pro"} dimColor={!isSelected}>
-        {tierBadge(model.pricing_tier)}{" "}
+    <Box flexDirection="row">
+      <Text color={isSelected ? PAKALON_ACCENT_COLOR : "gray"}>{prefix}</Text>
+      <Text color={tierColor(model.tier ?? "paid")} bold={model.tier !== "free"} dimColor={!isSelected}>
+        {tierBadge(model.tier ?? "paid")}{" "}
       </Text>
-      <Text color={isSelected ? "white" : undefined} bold={isSelected}>
+      <Text color={isSelected ? PAKALON_ACCENT_COLOR : undefined} bold={isSelected}>
         {model.name.padEnd(45)}
       </Text>
-      <Text dimColor> {ctxLabel(model.context_window).padStart(6)}</Text>
-      <Text color={barColor} dimColor={!isSelected}>
+      <Text dimColor> {ctxLabel(model.context_length ?? 0).padStart(6)}</Text>
+      <Text color={isSelected ? PAKALON_ACCENT_COLOR : barColor} dimColor={!isSelected}>
         {" "}[{remainingBar(pct)}] {pct}%
       </Text>
     </Box>
@@ -76,6 +89,7 @@ interface ModelsScreenProps {
 const ModelsScreen: React.FC<ModelsScreenProps> = ({ onSelect, onBack }) => {
   const { exit } = useApp();
   const setSelectedModel = useStore((s) => s.setSelectedModel);
+  const selectedModel = useStore((s) => s.selectedModel);
 
   const [models, setModels] = useState<ModelItem[]>([]);
   const [filtered, setFiltered] = useState<ModelItem[]>([]);
@@ -83,7 +97,7 @@ const ModelsScreen: React.FC<ModelsScreenProps> = ({ onSelect, onBack }) => {
   const [error, setError] = useState<string | null>(null);
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [sortKey, setSortKey] = useState<SortKey>("context");
-  const [filterTier, setFilterTier] = useState<"all" | "free" | "pro">("all");
+  const [filterTier, setFilterTier] = useState<"all" | "free" | "paid">("all");
   const [query, setQuery] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
@@ -92,21 +106,15 @@ const ModelsScreen: React.FC<ModelsScreenProps> = ({ onSelect, onBack }) => {
   useEffect(() => {
     let cancelled = false;
     const api = getApiClient();
-    api
-      .get<ModelItem[]>("/models")
-      .then(({ data }) => {
-        if (cancelled) return;
-        // Insert "auto" at top
-        const autoEntry: ModelItem = {
-          model_id: "auto",
-          name: "auto (recommended for your plan)",
-          context_window: 0,
-          pricing_tier: "free",
-          remaining_pct: 100,
-        };
-        const list = [autoEntry, ...data];
-        setModels(list);
-      })
+    const loadModels = async () => {
+      const initial = await api.get<{ models: ModelItem[] }>("/models?include_all=true");
+      const list = (initial.data.models ?? []).map(normalizeModel).filter((model) => Boolean(model.id));
+
+      if (cancelled) return;
+      setModels(list);
+    };
+
+    loadModels()
       .catch((err: unknown) => {
         if (!cancelled) {
           debugLog("ModelsScreen fetch error", err);
@@ -126,42 +134,44 @@ const ModelsScreen: React.FC<ModelsScreenProps> = ({ onSelect, onBack }) => {
     let list = [...models];
 
     if (filterTier !== "all") {
-      list = list.filter((m) => m.model_id === "auto" || m.pricing_tier === filterTier);
+      list = list.filter((m) => m.id === "auto" || m.tier === filterTier);
     }
 
     if (query.trim()) {
       const q = query.toLowerCase();
       list = list.filter(
-        (m) => m.name.toLowerCase().includes(q) || m.model_id.toLowerCase().includes(q)
+        (m) => m.name.toLowerCase().includes(q) || (m.id ?? "").toLowerCase().includes(q)
       );
     }
 
     list.sort((a, b) => {
-      if (a.model_id === "auto") return -1;
-      if (b.model_id === "auto") return 1;
-      if (sortKey === "context") return b.context_window - a.context_window;
+      if (a.id === "auto") return -1;
+      if (b.id === "auto") return 1;
+      if (sortKey === "context") return (b.context_length ?? 0) - (a.context_length ?? 0);
       if (sortKey === "name") return a.name.localeCompare(b.name);
       if (sortKey === "tier") {
-        if (a.pricing_tier === b.pricing_tier) return a.name.localeCompare(b.name);
-        return a.pricing_tier === "free" ? -1 : 1;
+        if (a.tier === b.tier) return a.name.localeCompare(b.name);
+        return a.tier === "free" ? -1 : 1;
       }
       return 0;
     });
 
     setFiltered(list);
-    setSelectedIdx(0);
-  }, [models, sortKey, filterTier, query]);
+
+    const currentIndex = list.findIndex((model) => model.id === selectedModel);
+    setSelectedIdx(currentIndex >= 0 ? currentIndex : 0);
+  }, [models, query, selectedModel, sortKey, filterTier]);
 
   const handleConfirm = useCallback(() => {
     const model = filtered[selectedIdx];
     if (!model) return;
 
-    setSelectedModel(model.model_id);
+    setSelectedModel(model.id!);
     setStatusMsg(`✓ Model set to: ${model.name}`);
     setConfirmed(true);
 
     if (onSelect) {
-      onSelect(model.model_id);
+      onSelect(model.id!);
     } else {
       setTimeout(() => exit(), 800);
     }
@@ -186,7 +196,7 @@ const ModelsScreen: React.FC<ModelsScreenProps> = ({ onSelect, onBack }) => {
       });
     } else if (input === "f") {
       setFilterTier((t) => {
-        const tiers: Array<"all" | "free" | "pro"> = ["all", "free", "pro"];
+        const tiers: Array<"all" | "free" | "paid"> = ["all", "free", "paid"];
         return tiers[(tiers.indexOf(t) + 1) % tiers.length]!;
       });
     } else if (input === "/" || (key.ctrl && input === "f")) {
@@ -255,7 +265,7 @@ const ModelsScreen: React.FC<ModelsScreenProps> = ({ onSelect, onBack }) => {
       <Box paddingX={1} marginBottom={0}>
         <Text dimColor>Search: </Text>
         <Text color="white">{query}</Text>
-        <Text color="cyan">█</Text>
+        <Text color={PAKALON_ACCENT_COLOR}>█</Text>
       </Box>
 
       {/* Column headers */}
@@ -269,7 +279,7 @@ const ModelsScreen: React.FC<ModelsScreenProps> = ({ onSelect, onBack }) => {
       <Box flexDirection="column">
         {visibleModels.map((model, i) => (
           <ModelRow
-            key={model.model_id}
+            key={model.id}
             model={model}
             isSelected={viewStart + i === selectedIdx}
             index={viewStart + i}

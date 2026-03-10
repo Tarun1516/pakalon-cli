@@ -5,17 +5,25 @@ import type { StateCreator } from "zustand";
 
 export type InteractionMode = "chat" | "agent" | "headless";
 
+export type LegacyPermissionMode = "edit" | "bypass";
+
 /**
  * Permission mode controls how aggressively Pakalon acts autonomously.
- * Cycles via Tab key: plan → edit → auto-accept → bypass → plan
+ * Cycles via Shift+Tab key: plan → auto-accept → orchestration → normal → plan
  *
- * - plan:        Read-only; no file writes without explicit approval (safest)
- * - edit:        Suggests edits; user must approve each write
- * - auto-accept: Auto-applies all edits without prompting
- * - bypass:      Bypasses all safety gates (not recommended)
+ * - plan:          Planning-first; no autonomous file changes
+ * - auto-accept:   Applies edits and runs commands automatically
+ * - orchestration: Brainstorming / Q&A mode with tooling disabled
+ * - normal:        Interactive execution; asks for approval before tools run
  */
-export type PermissionMode = "plan" | "edit" | "auto-accept" | "bypass";
-const PERMISSION_CYCLE: PermissionMode[] = ["plan", "edit", "auto-accept", "bypass"];
+export type PermissionMode = "plan" | "normal" | "auto-accept" | "orchestration";
+const PERMISSION_CYCLE: PermissionMode[] = ["plan", "auto-accept", "orchestration", "normal"];
+
+export function normalizePermissionMode(mode?: PermissionMode | LegacyPermissionMode | null): PermissionMode {
+  if (mode === "edit") return "normal";
+  if (mode === "bypass") return "auto-accept";
+  return mode ?? "plan";
+}
 
 /** Parameters for the 6-phase bridge pipeline launched via /build */
 export interface BridgeModeParams {
@@ -30,7 +38,7 @@ export interface BridgeModeParams {
 
 export interface ModeState {
   mode: InteractionMode;
-  /** Permission mode for file edits — cycled with Tab key (T-CLI-18) */
+  /** Permission mode for file edits — cycled with Shift+Tab in the input bar */
   permissionMode: PermissionMode;
   /** Thinking mode — sends reasoning capacity tokens to the model (T-CLI-19) */
   thinkingEnabled: boolean;
@@ -56,9 +64,9 @@ export interface ModeState {
   pendingBridgeMode: BridgeModeParams | null;
   // Actions
   setMode: (mode: InteractionMode) => void;
-  /** Cycle through plan → edit → auto-accept → bypass (bound to Tab) */
+  /** Cycle through plan → auto-accept → orchestration → normal */
   cyclePermissionMode: () => void;
-  setPermissionMode: (mode: PermissionMode) => void;
+  setPermissionMode: (mode: PermissionMode | LegacyPermissionMode) => void;
   /** Toggle extended thinking on/off (bound to Shift+Tab) */
   toggleThinking: () => void;
   setAgentRunning: (running: boolean) => void;
@@ -101,7 +109,7 @@ export const createModeSlice: StateCreator<
       const next = PERMISSION_CYCLE[(idx + 1) % PERMISSION_CYCLE.length];
       return { permissionMode: next };
     }),
-  setPermissionMode: (mode) => set({ permissionMode: mode }),
+  setPermissionMode: (mode) => set({ permissionMode: normalizePermissionMode(mode) }),
   toggleThinking: () => set((s) => ({ thinkingEnabled: !s.thinkingEnabled })),
   setAgentRunning: (running) => set({ isAgentRunning: running }),
   setAgentStep: (step) => set({ agentCurrentStep: step }),

@@ -1,6 +1,11 @@
 /**
- * LogoAnimated — wrapper around the Video-animation ASCII animation.
- * Used on first launch splash screen.
+ * LogoAnimated — first-launch video animation.
+ *
+ * Plays the @assets/video-animation Pakalon logo on the very first time
+ * the user opens the CLI (during the SplashLoginScreen animation stage).
+ *
+ * Uses MiniLogoAnimation as the Ink-compatible renderer for the video frames
+ * (the asset files use non-Ink JSX and require this chalk-based wrapper).
  */
 import MiniLogoAnimation from "@/frontend/animations/MiniLogoAnimation.js";
 import React from "react";

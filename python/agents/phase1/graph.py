@@ -90,23 +90,83 @@ async def _llm_call(messages: list[dict], model: str = DEFAULT_MODEL, max_tokens
 # ------------------------------------------------------------------
 
 async def research_web(state: Phase1State) -> Phase1State:
-    """Node: Firecrawl similar products + Context7 library docs + store in Mem0."""
+    """Node: 3-tier web research (ScrapeGraphAI → Firecrawl → httpx) + Context7 library docs + Mem0."""
     sse = state.get("send_sse")
     if sse:
         sse({"type": "text_delta", "content": "🔍 Researching similar products...\n"})
 
     prompt_text = state.get("user_prompt", "")
+    search_query = f"similar products to: {prompt_text[:200]}"
+    search_url = f"https://www.google.com/search?q={search_query.replace(' ', '+')}"
 
-    # Try Firecrawl research
+    # ── Tier 1: ScrapeGraphAI (T-P1-18) ─────────────────────────────────────
+    # AI-powered scraping using SmartScraper with OpenRouter as the LLM backend.
+    # Requires OPENROUTER_API_KEY; gracefully skips if scrapegraphai not installed.
     research = ""
     try:
-        from ...tools.firecrawl import FirecrawlTool
-        fc = FirecrawlTool()
-        search_query = f"similar products to: {prompt_text[:200]}"
-        # Use a search-engine-style scrape
-        research = fc.scrape(f"https://www.google.com/search?q={search_query.replace(' ', '+')}")[:2000]
-    except Exception as e:
-        research = f"[Research unavailable: {e}]"
+        from scrapegraphai.graphs import SmartScraperGraph  # type: ignore  # noqa: PLC0415
+        api_key = os.environ.get("OPENROUTER_API_KEY", "")
+        if api_key:
+            _sgai_config = {
+                "llm": {
+                    "api_key": api_key,
+                    "model": "openai/gpt-4o-mini",
+                    "base_url": "https://openrouter.ai/api/v1",
+                },
+                "verbose": False,
+                "headless": True,
+            }
+            _sgai_prompt = (
+                f"Find the top 5 similar products or competitors to this concept: {prompt_text[:300]}. "
+                "Return: product names, key features, pricing, and target audience."
+            )
+            _sgai_graph = SmartScraperGraph(
+                prompt=_sgai_prompt,
+                source=search_url,
+                config=_sgai_config,
+            )
+            _sgai_result = _sgai_graph.run()
+            if isinstance(_sgai_result, dict):
+                research = str(_sgai_result)[:3000]
+            elif isinstance(_sgai_result, str):
+                research = _sgai_result[:3000]
+            if research and sse:
+                sse({"type": "text_delta", "content": "  ✅ ScrapeGraphAI research complete\n"})
+    except ImportError:
+        pass  # scrapegraphai not installed — fall through to Tier 2
+    except Exception as _sgai_err:
+        if sse:
+            sse({"type": "text_delta", "content": f"  ⚠ ScrapeGraphAI failed: {_sgai_err!s:.80s} — trying Firecrawl\n"})
+
+    # ── Tier 2: Firecrawl (T-P1-19) ─────────────────────────────────────────
+    if not research:
+        try:
+            from ...tools.firecrawl import FirecrawlTool  # noqa: PLC0415
+            fc = FirecrawlTool()
+            research = fc.scrape(search_url)[:2000]
+            if research and sse:
+                sse({"type": "text_delta", "content": "  ✅ Firecrawl research complete\n"})
+        except Exception as _fc_err:
+            if sse:
+                sse({"type": "text_delta", "content": f"  ⚠ Firecrawl failed: {_fc_err!s:.80s} — trying httpx\n"})
+
+    # ── Tier 3: httpx basic HTML fetch (T-P1-19) — always-available fallback ─
+    if not research:
+        try:
+            import html  # noqa: PLC0415
+            import re as _re  # noqa: PLC0415
+            async with httpx.AsyncClient(timeout=15, follow_redirects=True,
+                                          headers={"User-Agent": "pakalon-research/1.0"}) as _hx:
+                _resp = await _hx.get(search_url)
+                _text = html.unescape(_resp.text)
+                # Strip HTML tags crudely
+                _text = _re.sub(r"<[^>]+>", " ", _text)
+                _text = _re.sub(r"\s{3,}", "  ", _text).strip()
+                research = _text[:3000]
+            if research and sse:
+                sse({"type": "text_delta", "content": "  ✅ httpx fallback research complete\n"})
+        except Exception as _hx_err:
+            research = f"[Research unavailable: {_hx_err}]"
 
     # T-P1-10 / T-MCP-12: Context7 MCP — fetch up-to-date docs for detected libraries
     context7_docs = ""
@@ -156,6 +216,53 @@ async def research_web(state: Phase1State) -> Phase1State:
     full_research = research
     if context7_docs:
         full_research = f"{research}\n\n# Library Documentation (Context7)\n{context7_docs}"
+
+    # T-P1-12C/12D: AgentBrowser competitor site screenshots + accessibility snapshots
+    agent_browser_research: list[str] = []
+    try:
+        from ..phase3.agent_browser import AgentBrowser as _AB  # noqa: PLC0415
+
+        _project_dir_p1 = state.get("project_dir", ".")
+        _ab_p1 = _AB(project_dir=_project_dir_p1, timeout=20)
+
+        # Extract competitor URLs found in research text (simple heuristic)
+        import re as _re_ab  # noqa: PLC0415
+        _urls = _re_ab.findall(r"https?://[^\s\"'>]+", full_research)
+        # Filter to likely competitor homepages (short paths, not Google/social)
+        _skip = {"google", "youtube", "twitter", "facebook", "linkedin", "amazon", "github"}
+        _competitor_urls = [
+            u for u in _urls
+            if not any(s in u.lower() for s in _skip) and len(u) < 80
+        ][:3]
+
+        if sse and _competitor_urls:
+            sse({"type": "text_delta", "content": f"  🤖 AgentBrowser: snapping {len(_competitor_urls)} competitor site(s)...\n"})
+
+        for _cu in _competitor_urls:
+            try:
+                # T-P1-12C: Screenshot for design token extraction
+                _sc = await _ab_p1.screenshot(_cu)
+                _sc_info = f"screenshot={_sc.get('path', 'N/A')}" if isinstance(_sc, dict) else ""
+                # T-P1-12D: Accessibility tree snapshot for design reference
+                _snap = await _ab_p1.snapshot(_cu)
+                _node_ct = len((_snap.get("result", {}) or {}).get("nodes", [])) if isinstance(_snap, dict) else 0
+                agent_browser_research.append(
+                    f"Competitor: {_cu}\n  Accessibility nodes: {_node_ct}\n  {_sc_info}"
+                )
+                if sse:
+                    sse({"type": "text_delta", "content": f"    📸 {_cu}: {_node_ct} a11y nodes\n"})
+            except Exception as _ab_cu_err:
+                if sse:
+                    sse({"type": "text_delta", "content": f"    ⚠ {_cu}: {_ab_cu_err!s:.60s}\n"})
+
+    except ImportError:
+        pass  # Phase 3 not available yet
+    except Exception as _ab_res_err:
+        if sse:
+            sse({"type": "text_delta", "content": f"  AgentBrowser research skipped: {_ab_res_err!s:.80s}\n"})
+
+    if agent_browser_research:
+        full_research += "\n\n# Competitor Visual Analysis (AgentBrowser)\n" + "\n".join(agent_browser_research)
 
     # Store in Mem0
     try:
@@ -1380,7 +1487,12 @@ def build_phase1_graph() -> Any:
     graph.add_edge("load_figma", "generate_files")
     graph.add_edge("generate_files", END)
 
-    return graph.compile()
+    try:
+        from ..shared.langgraph_checkpointer import build_checkpointer  # noqa: PLC0415
+        _ckpt = build_checkpointer()
+    except Exception:
+        _ckpt = None
+    return graph.compile(checkpointer=_ckpt) if _ckpt is not None else graph.compile()
 
 
 # ------------------------------------------------------------------
@@ -1420,7 +1532,19 @@ async def run_phase1(
         for node_fn in [research_web, check_existing_codebase, qa_loop, context_ratio_hil, load_figma, generate_files]:
             state = await node_fn(state)  # type: ignore[arg-type]
     else:
-        state = await graph.ainvoke(initial_state)
+        try:
+            from ..shared.langgraph_checkpointer import thread_config as _tc  # noqa: PLC0415
+            _cfg = _tc(user_id, project_dir, phase=1)
+        except Exception:
+            _cfg = {}
+        state = await graph.ainvoke(initial_state, config=_cfg)
+    # T-RAG-01C: store Phase 1 summary in Mem0 for downstream phases
+    try:
+        from ..shared.langgraph_checkpointer import store_phase_mem0  # noqa: PLC0415
+        _p1_summary = str(list(state.get("generated_files", {}).keys()))[:400]
+        store_phase_mem0(user_id, project_dir, phase=1, summary=f"Generated: {_p1_summary}")
+    except Exception:
+        pass
 
     send_sse({"type": "phase_complete", "phase": 1, "files": list(state.get("generated_files", {}).keys())})
 

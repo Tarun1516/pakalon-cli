@@ -271,8 +271,8 @@ Be concise. Max 5 suggestions. Return ONLY valid JSON array."""
         return result
 
     def write_subagent_md(self, out_dir: str, results: dict[str, Any]) -> str:
-        """Write subagent-4.md with CI/CD review results."""
-        out_path = pathlib.Path(out_dir) / "subagent-4.md"
+        """Write subagent-5.md with CI/CD review results."""
+        out_path = pathlib.Path(out_dir) / "subagent-5.md"
         summary = results.get("summary", {})
         findings = results.get("findings", [])
         missing = results.get("missing_practices", [])

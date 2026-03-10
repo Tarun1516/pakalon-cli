@@ -6,6 +6,8 @@ import React, { useState, useEffect } from "react";
 import { Box, Text } from "ink";
 import type { ChatMessage } from "@/store/slices/session.slice.js";
 
+const PAKALON_ASSISTANT_COLOR = "#f59e0b";
+
 // T-CLI-11: Extract image file paths from message text
 const IMAGE_PATH_RE = /(?:^|\s)((?:\.{0,2}\/|[A-Za-z]:[/\\]|\/)[^\s"'<>]+\.(?:png|jpg|jpeg|gif|webp|bmp|svg))(?:\s|$)/gi;
 
@@ -41,13 +43,13 @@ const InlineImage: React.FC<{ filePath: string }> = ({ filePath }) => {
   }, [filePath]);
 
   if (error) return <Text dimColor>{error}</Text>;
-  if (pixels === null) return <Text dimColor>⏳ loading image…</Text>;
+  if (pixels === null) return <Text dimColor>loading image…</Text>;
   // term-img outputs raw escape sequences — print directly
   return (
     <Box flexDirection="column">
       {/* eslint-disable-next-line react/no-danger-with-children */}
       <Text>{pixels}</Text>
-      <Text dimColor color="gray">📷 {filePath}</Text>
+      <Text dimColor color="gray">image {filePath}</Text>
     </Box>
   );
 };
@@ -81,11 +83,11 @@ const MessageItem: React.FC<{ msg: ChatMessage }> = ({ msg }) => {
   }
 
   return (
-    <Box flexDirection="column" marginY={1}>
+    <Box flexDirection="column" marginY={0}>
       <Box gap={1}>
         <Text
           bold
-          color={isUser ? "blue" : "green"}
+          color={isUser ? "blue" : PAKALON_ASSISTANT_COLOR}
         >
           {isUser ? "you" : "pakalon"}
         </Text>
@@ -113,7 +115,7 @@ const MessageList: React.FC<MessageListProps> = ({ messages, maxVisible = 20 }) 
 
   if (visible.length === 0) {
     return (
-      <Box padding={1}>
+      <Box paddingX={1}>
         <Text dimColor>Start a conversation — type a message below.</Text>
       </Box>
     );

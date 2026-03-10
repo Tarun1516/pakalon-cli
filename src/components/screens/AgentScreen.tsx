@@ -26,6 +26,7 @@ import {
 import type { ChoiceRequestEvent, PhaseSSEEvent } from "@/bridge/types.js";
 import logger from "@/utils/logger.js";
 import type { ModelMessage as CoreMessage } from "ai";
+import { DEFAULT_FREE_MODEL_ID } from "@/constants/models.js";
 
 const AGENT_SYSTEM = `You are Pakalon, an agentic AI coding assistant running in a terminal.
 You operate autonomously to complete tasks. You have tools available:
@@ -372,7 +373,7 @@ const AgentScreen: React.FC<AgentScreenProps> = ({ initialTask, projectDir, brid
       const agentSystem = buildSystemWithContext(AGENT_SYSTEM + memoryContext, []);
 
       await handleStream({
-        model: selectedModel ?? "openai/gpt-4o-mini",
+        model: selectedModel ?? DEFAULT_FREE_MODEL_ID,
         messages: trimmed,
         apiKey: localKey || undefined,
         authToken: useProxy ? (token ?? undefined) : undefined,

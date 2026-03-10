@@ -728,6 +728,84 @@ async def chrome_mcp_verify(state: Phase2State) -> Phase2State:
     return state
 
 
+async def agent_browser_snapshot(state: Phase2State) -> Phase2State:
+    """
+    Node: T-P2-09/12/13 — Use AgentBrowser to capture an accessibility tree
+    snapshot and baseline screenshot from the generated wireframe HTML file.
+
+    Stores accessibility node count in state["tdd_result"]["agent_browser"]
+    and saves wireframe-baseline.png to the wireframes directory.
+    """
+    sse = state.get("send_sse") or (lambda e: None)
+    sse({"type": "text_delta", "content": "🤖 AgentBrowser: capturing wireframe accessibility snapshot...\n"})
+
+    project_dir = pathlib.Path(state.get("project_dir", "."))
+    wireframe_html = get_phase_dir(project_dir, 2, create=False) / "wireframe.html"
+
+    # Fall back to inline SVG in a temp file if the HTML hasn't been written yet
+    wireframe_url: str | None = None
+    _tmp_html: str | None = None
+    if wireframe_html.exists():
+        wireframe_url = wireframe_html.as_uri()
+    else:
+        svg = state.get("wireframe_svg", "")
+        if svg:
+            import tempfile as _tmpf
+            with _tmpf.NamedTemporaryFile(
+                suffix=".html", delete=False, mode="w", encoding="utf-8"
+            ) as _tf:
+                _tf.write(
+                    f"<!DOCTYPE html><html><body style='background:#f9fafb;margin:0'>{svg}</body></html>"
+                )
+                _tmp_html = _tf.name
+            wireframe_url = pathlib.Path(_tmp_html).as_uri()
+
+    ab_result: dict = {}
+    if wireframe_url:
+        try:
+            from ..phase3.agent_browser import AgentBrowser  # type: ignore
+            ab = AgentBrowser(project_dir=str(project_dir))
+
+            # T-P2-12: Accessibility tree extraction
+            snap = await ab.snapshot(wireframe_url)
+            node_count = len(snap.get("nodes", [])) if isinstance(snap, dict) else 0
+            ab_result["node_count"] = node_count
+            sse({"type": "text_delta", "content": f"  🌳 Accessibility tree: {node_count} nodes\n"})
+
+            # T-P2-13: Baseline screenshot for visual drift tracking
+            baseline_ss = await ab.screenshot(wireframe_url)
+            baseline_path = baseline_ss.get("path") if isinstance(baseline_ss, dict) else None
+            if baseline_path:
+                import shutil as _sh
+                wf_dir = get_wireframes_dir(project_dir)
+                wf_dir.mkdir(parents=True, exist_ok=True)
+                _dest = wf_dir / "wireframe-baseline.png"
+                _sh.copy2(baseline_path, _dest)
+                ab_result["baseline_screenshot"] = str(_dest)
+                sse({"type": "text_delta", "content": f"  📸 Baseline → wireframes/wireframe-baseline.png\n"})
+
+        except Exception as _ab_err:
+            ab_result["skipped"] = str(_ab_err)
+            sse({"type": "text_delta", "content": f"  AgentBrowser snapshot skipped: {_ab_err}\n"})
+    else:
+        ab_result["skipped"] = "No wireframe HTML or SVG available"
+        sse({"type": "text_delta", "content": "  AgentBrowser snapshot skipped: no wireframe content\n"})
+
+    # Clean up temp file
+    if _tmp_html:
+        try:
+            import os as _os
+            _os.unlink(_tmp_html)
+        except Exception:
+            pass
+
+    # Merge into tdd_result
+    tdd = dict(state.get("tdd_result") or {})
+    tdd["agent_browser"] = ab_result
+    state["tdd_result"] = tdd
+    return state
+
+
 async def save_outputs(state: Phase2State) -> Phase2State:
     """Node: Save all phase-2 outputs to disk — SVG + JSON wireframe."""
     sse = state.get("send_sse") or (lambda e: None)
@@ -930,6 +1008,7 @@ def build_phase2_graph() -> Any:
     graph.add_node("await_approval", await_approval)
     graph.add_node("tdd_screenshot", tdd_screenshot)
     graph.add_node("chrome_mcp_verify", chrome_mcp_verify)
+    graph.add_node("agent_browser_snapshot", agent_browser_snapshot)
     graph.add_node("save_outputs", save_outputs)
     graph.set_entry_point("read_phase1")
     graph.add_edge("read_phase1", "check_figma")
@@ -938,9 +1017,15 @@ def build_phase2_graph() -> Any:
     graph.add_edge("open_browser", "await_approval")
     graph.add_edge("await_approval", "tdd_screenshot")
     graph.add_edge("tdd_screenshot", "chrome_mcp_verify")
-    graph.add_edge("chrome_mcp_verify", "save_outputs")
+    graph.add_edge("chrome_mcp_verify", "agent_browser_snapshot")
+    graph.add_edge("agent_browser_snapshot", "save_outputs")
     graph.add_edge("save_outputs", END)
-    return graph.compile()
+    try:
+        from ..shared.langgraph_checkpointer import build_checkpointer  # noqa: PLC0415
+        _ckpt = build_checkpointer()
+    except Exception:
+        _ckpt = None
+    return graph.compile(checkpointer=_ckpt) if _ckpt is not None else graph.compile()
 
 
 async def run_phase2(
@@ -973,7 +1058,19 @@ async def run_phase2(
         for node_fn in [read_phase1, check_figma, generate_penpot, open_browser, await_approval, tdd_screenshot, chrome_mcp_verify, save_outputs]:
             state = await node_fn(state)
     else:
-        state = await graph.ainvoke(initial)
+        try:
+            from ..shared.langgraph_checkpointer import thread_config as _tc2  # noqa: PLC0415
+            _cfg2 = _tc2(user_id, project_dir, phase=2)
+        except Exception:
+            _cfg2 = {}
+        state = await graph.ainvoke(initial, config=_cfg2)
+    # T-RAG-01C: store Phase 2 summary in Mem0
+    try:
+        from ..shared.langgraph_checkpointer import store_phase_mem0  # noqa: PLC0415
+        _p2_outs = ", ".join(str(o) for o in state.get("outputs_saved", [])[:5])
+        store_phase_mem0(user_id, project_dir, phase=2, summary=f"Wireframe outputs: {_p2_outs}")
+    except Exception:
+        pass
     return {
         "status": "complete",
         "outputs_saved": state.get("outputs_saved", []),

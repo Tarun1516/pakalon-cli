@@ -1,17 +1,17 @@
 /**
  * ChatScreen — main chat TUI. Composes all UI primitives and wires AI streaming.
  */
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Box, Text, useApp, useInput } from "ink";
 import Banner from "@/components/ui/Banner.js";
 import MessageList from "@/components/ui/MessageList.js";
 import InputBar from "@/components/ui/InputBar.js";
-import ContextBar from "@/components/ui/ContextBar.js";
 import StatusLine from "@/components/ui/StatusLine.js";
 import PermissionDialog from "@/components/ui/PermissionDialog.js";
 import UndoMenu from "@/components/ui/UndoMenu.js";
 import SkillsMarketplaceScreen from "@/components/screens/SkillsMarketplaceScreen.js";
 import ConfigScreen from "@/components/screens/ConfigScreen.js";
+import ModelsScreen from "@/components/screens/ModelsScreen.js";
 import { useAuth, useSession, useModel, useStreaming, useMode, useStore, useCredits } from "@/store/index.js";
 import { handleStream } from "@/ai/stream.js";
 import { allTools } from "@/ai/tools.js";
@@ -26,6 +26,7 @@ import { cmdInit } from "@/commands/init.js";
 import { cmdListModels, cmdSetModel } from "@/commands/models.js";
 import { planExists, getBuildPrompt } from "@/commands/plan.js";
 import { getWorkflowsList, cmdSaveWorkflow, cmdShowWorkflow, cmdDeleteWorkflow, cmdRunWorkflow, cmdScheduleWorkflow, cmdCreateWorkflow, type WorkflowStep } from "@/commands/workflows.js";
+import { cmdCreateAutomation, cmdDeleteAutomation, cmdListAutomationConnectors, cmdListAutomationCronJobs, cmdListAutomationLogs, cmdListAutomations, cmdRunAutomation, cmdStartAutomationOAuth, cmdToggleAutomationConnector, findAutomationByIdentifier, type AutomationRecord } from "@/commands/automations.js";
 import { getPluginsList, cmdInstallPlugin, cmdRemovePlugin, discoverMarketplace, cmdCheckUpdates, cmdAutoUpdate } from "@/commands/plugins.js";
 import { cmdHistoryList } from "@/commands/history.js";
 import { cmdListSessions, cmdCreateSession, cmdResumeSession } from "@/commands/session.js";
@@ -43,6 +44,7 @@ import { handleSearchCommand } from "@/commands/search.js";
 import { handleCleanCommand } from "@/commands/clean.js";
 import { handleErrorHelpCommand } from "@/commands/error-help.js";
 import { handleTestGenCommand } from "@/commands/test-gen.js";
+import { DEFAULT_FREE_MODEL_ID } from "@/constants/models.js";
 import { setupJiraMcp, removeJiraMcp, jiraStatus, JIRA_HELP, setupNotionMcp, removeNotionMcp, notionStatus, NOTION_HELP } from "@/mcp/enterprise/index.js";
 import TokenBudgetWarning from "@/components/ui/TokenBudgetWarning.js";
 import { SessionCostTracker } from "@/utils/cost-estimate.js";
@@ -90,6 +92,18 @@ interface ChatScreenProps {
   memoryBlock?: string;
 }
 
+type AutomationWizardStep = "name" | "prompt" | "connectors" | "schedule";
+
+interface AutomationWizardState {
+  step: AutomationWizardStep;
+  data: {
+    name?: string;
+    prompt?: string;
+    requiredConnectors?: string[];
+    scheduleCron?: string;
+  };
+}
+
 const ChatScreen: React.FC<ChatScreenProps> = ({
   initialMessage,
   projectDir,
@@ -112,6 +126,7 @@ const ChatScreen: React.FC<ChatScreenProps> = ({
   const { messages, addMessage, finalizeStreamingMessage } = useSession();
   const { selectedModel, availableModels } = useModel();
   const setSelectedModel = useStore((s) => s.setSelectedModel);
+  const modelsError = useStore((s: any) => s.modelsError as string | null);
   const { creditBalance, fetchCredits } = useCredits();
 
   // Fetch credit balance on mount (and after login)
@@ -213,7 +228,7 @@ const ChatScreen: React.FC<ChatScreenProps> = ({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
   const { isStreaming, appendStreamChunk, setThinkContent, thinkContent, reset: resetStreaming } = useStreaming();
-  const { verbose, thinkingEnabled, privacyMode, cyclePermissionMode, toggleThinking, permissionMode, autoCompact, autoCompactThreshold, toggleAutoCompact, setAutoCompactThreshold } = useMode();
+  const { verbose, thinkingEnabled, privacyMode, permissionMode, autoCompact, autoCompactThreshold, toggleAutoCompact, setAutoCompactThreshold } = useMode();
   const remainingPct = useStore((s) => s.remainingPct);
   const setRemainingPct = useStore((s) => s.setRemainingPct);
   const activeSessionId = useStore((s) => s.sessionId);
@@ -236,6 +251,7 @@ const ChatScreen: React.FC<ChatScreenProps> = ({
   const [showTaskPanel, setShowTaskPanel] = useState(false);
   const [bashOverlayCmd, setBashOverlayCmd] = useState<string | null>(null);
   const [showBashOverlay, setShowBashOverlay] = useState(false);
+  const [showModelsScreen, setShowModelsScreen] = useState(false);
   // T-CLI-51: Background bash tasks — spawn non-blocking, collect output
   interface BgTask { id: string; cmd: string; status: "running" | "done" | "error"; output: string; exitCode?: number; }
   const [backgroundTasks, setBackgroundTasks] = useState<BgTask[]>([]);
@@ -249,6 +265,7 @@ const ChatScreen: React.FC<ChatScreenProps> = ({
   const [tuiTheme, setTuiTheme] = useState<"dark" | "light" | "high-contrast" | "solarized">("dark");
   // T-CLI-72: Sandbox mode (bash exec isolated per invocation)
   const [sandboxMode, setSandboxMode] = useState(false);
+  const [automationWizard, setAutomationWizard] = useState<AutomationWizardState | null>(null);
   const [sessionTokensUsed, setSessionTokensUsed] = useState(0);
   // Budget tracking: cumulative USD spend estimate
   const [sessionSpendUsd, setSessionSpendUsd] = useState(0);
@@ -259,6 +276,12 @@ const ChatScreen: React.FC<ChatScreenProps> = ({
   const budgetExceeded = maxBudgetUsd !== undefined && sessionSpendUsd >= maxBudgetUsd;
   const modelInfo = availableModels.find((m) => m.id === selectedModel);
   const sessionContextLimit = modelInfo?.contextLength ?? 128000;
+  const effectiveModelId = useMemo(() => {
+    if (selectedModel && availableModels.some((model) => model.id === selectedModel)) {
+      return selectedModel;
+    }
+    return availableModels[0]?.id ?? null;
+  }, [availableModels, selectedModel]);
   const attemptedAutoModelRef = useRef(false);
   // T-LSP-03: Real-time LSP diagnostics — polled every 5s when task panel open
   interface LspDiag { severity: string; message: string; line?: number; source?: string; filePath: string; }
@@ -314,9 +337,17 @@ const ChatScreen: React.FC<ChatScreenProps> = ({
       return;
     }
 
+    if (selectedModel && !availableModels.some((model) => model.id === selectedModel)) {
+      const fallbackAvailable = availableModels[0]?.id;
+      if (fallbackAvailable) {
+        setSelectedModel(fallbackAvailable);
+      }
+      return;
+    }
+
     if (selectedModel) return;
 
-    const preferredDefault = findModelId(defaultModel);
+    const preferredDefault = findModelId(defaultModel ?? DEFAULT_FREE_MODEL_ID);
     if (preferredDefault) {
       setSelectedModel(preferredDefault);
       return;
@@ -326,8 +357,8 @@ const ChatScreen: React.FC<ChatScreenProps> = ({
       attemptedAutoModelRef.current = true;
       void (async () => {
         try {
-          const autoRes = await getApiClient().get<{ model_id: string }>("/models/auto");
-          const autoId = findModelId(autoRes.data.model_id);
+          const autoRes = await getApiClient().get<{ id?: string; model_id?: string }>("/models/auto");
+          const autoId = findModelId(autoRes.data.id ?? autoRes.data.model_id);
           if (autoId) {
             setSelectedModel(autoId);
             return;
@@ -335,7 +366,7 @@ const ChatScreen: React.FC<ChatScreenProps> = ({
         } catch {
           // non-fatal; fallback below
         }
-        const fallbackId = findModelId(fallbackModel);
+        const fallbackId = findModelId(fallbackModel ?? DEFAULT_FREE_MODEL_ID);
         if (fallbackId) {
           setSelectedModel(fallbackId);
         }
@@ -405,7 +436,7 @@ const ChatScreen: React.FC<ChatScreenProps> = ({
               allDiags.push({
                 severity: d.severity ?? "info",
                 message: d.message,
-                line: d.range?.start?.line != null ? (d.range.start.line + 1) : undefined,
+                line: d.line != null ? (d.line + 1) : undefined,
                 source: d.source ?? undefined,
                 filePath: fp,
               });
@@ -423,6 +454,114 @@ const ChatScreen: React.FC<ChatScreenProps> = ({
   const info = useCallback((content: string) => {
     addMessage({ id: crypto.randomUUID(), role: "assistant", content, createdAt: new Date(), isStreaming: false });
   }, [addMessage]);
+
+  const openExternalUrl = useCallback(async (url: string) => {
+    if (process.platform === "win32") {
+      const escaped = url.replace(/'/g, "''");
+      await execAsync(`powershell -NoProfile -Command "Start-Process '${escaped}'"`);
+      return;
+    }
+    if (process.platform === "darwin") {
+      await execAsync(`open '${url.replace(/'/g, "'\\''")}'`);
+      return;
+    }
+    await execAsync(`xdg-open '${url.replace(/'/g, "'\\''")}'`);
+  }, []);
+
+  const normalizeAutomationSchedule = useCallback((input: string) => {
+    const value = input.trim().toLowerCase();
+    if (!value || value === "default") return "hourly";
+    if (["hourly", "daily", "weekdays", "weekly"].includes(value)) return value;
+    return input.trim();
+  }, []);
+
+  const handleAutomationWizardStep = useCallback(async (input: string) => {
+    if (!automationWizard) return false;
+
+    const raw = input.trim();
+    const lower = raw.toLowerCase();
+    if (!raw) {
+      info("Automation setup is waiting for input. Type `/cancel` to stop the wizard.");
+      return true;
+    }
+    if (lower === "/cancel" || lower === "cancel" || lower === "exit") {
+      setAutomationWizard(null);
+      info("Automation creation cancelled.");
+      return true;
+    }
+
+    if (automationWizard.step === "name") {
+      setAutomationWizard({ step: "prompt", data: { name: raw } });
+      info("Nice. Now describe what the automation should do in plain English. Example: `Monitor owner/repo for open PRs and send updates to #dev-alerts in Slack.`");
+      return true;
+    }
+
+    if (automationWizard.step === "prompt") {
+      setAutomationWizard({
+        step: "connectors",
+        data: { ...automationWizard.data, prompt: raw },
+      });
+      info("Which app connections should it use? Enter a comma-separated list like `github, slack`, or type `auto` and I'll infer them from your prompt.");
+      return true;
+    }
+
+    if (automationWizard.step === "connectors") {
+      const requiredConnectors = lower === "auto"
+        ? undefined
+        : raw.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean);
+      setAutomationWizard({
+        step: "schedule",
+        data: { ...automationWizard.data, requiredConnectors },
+      });
+      info("When should it run? Use `hourly`, `daily`, `weekdays`, `weekly`, or a cron expression like `0 9 * * 1-5`.");
+      return true;
+    }
+
+    const scheduleCron = normalizeAutomationSchedule(raw);
+    try {
+      const automation = await cmdCreateAutomation({
+        name: automationWizard.data.name ?? "Untitled automation",
+        prompt: automationWizard.data.prompt ?? raw,
+        required_connectors: automationWizard.data.requiredConnectors,
+        schedule_cron: scheduleCron,
+      });
+      setAutomationWizard(null);
+
+      const summaryLines = [
+        `✅ Automation **${automation.name}** created.`,
+        automation.schedule_cron ? `- Schedule: \`${automation.schedule_cron}\` (${automation.schedule_timezone})` : "- Schedule: manual",
+        automation.required_connectors?.length ? `- Connectors: ${automation.required_connectors.map((item) => `\`${item}\``).join(", ")}` : "- Connectors: inferred from prompt",
+      ];
+
+      if (automation.missing_connectors?.length) {
+        summaryLines.push("", `Missing OAuth connections: ${automation.missing_connectors.map((item) => `\`${item}\``).join(", ")}`);
+        for (const provider of automation.missing_connectors) {
+          try {
+            const oauth = await cmdStartAutomationOAuth(provider);
+            let opened = false;
+            try {
+              await openExternalUrl(oauth.auth_url);
+              opened = true;
+            } catch {
+              opened = false;
+            }
+            summaryLines.push(`- ${provider}: ${opened ? "opened browser for OAuth" : oauth.auth_url}`);
+          } catch (oauthErr: any) {
+            summaryLines.push(`- ${provider}: ${oauthErr.message}`);
+          }
+        }
+        summaryLines.push("", "After connecting your apps, run `/automations list` or `/automations connectors` to confirm everything is ready.");
+      } else {
+        summaryLines.push("", "Everything it needs is already connected. Very efficient. Suspiciously efficient.");
+      }
+
+      info(summaryLines.join("\n"));
+    } catch (err: any) {
+      setAutomationWizard(null);
+      info(`Automation creation failed: ${err.message}`);
+    }
+    return true;
+  }, [automationWizard, info, normalizeAutomationSchedule, openExternalUrl]);
 
   // T-005: Check context exhaustion before launching AI pipeline
   const checkContextAndProceed = useCallback(async (
@@ -520,6 +659,10 @@ const ChatScreen: React.FC<ChatScreenProps> = ({
         `Upgrade to Pro or wait for your billing period to reset to continue using Pakalon.\n` +
         `Run \`/upgrade\` or visit https://pakalon.io/pricing`,
       );
+      return;
+    }
+
+    if (await handleAutomationWizardStep(text)) {
       return;
     }
 
@@ -1172,6 +1315,180 @@ const ChatScreen: React.FC<ChatScreenProps> = ({
             return;
           }
 
+          case "/automations": {
+            const sub = (args[0] ?? "list").toLowerCase();
+
+            if (sub === "create" || sub === "new") {
+              setAutomationWizard({ step: "name", data: {} });
+              info("Let’s build a new automation. First up: what should we call it?\n\nType a name, or `/cancel` to stop.");
+              return;
+            }
+
+            if (sub === "list") {
+              try {
+                const payload = await cmdListAutomations();
+                if (!payload.automations.length) {
+                  const templateLines = payload.templates.map((template) =>
+                    `  - **${template.name}** (\`${template.key}\`) — ${template.description}`
+                  );
+                  info(`No automations yet.\n\nStarter templates:\n${templateLines.join("\n")}\n\nRun \`/automations create\` to launch the guided setup.`);
+                  return;
+                }
+                const lines = payload.automations.map((automation) => {
+                  const connectors = automation.required_connectors?.length
+                    ? automation.required_connectors.map((item) => `\`${item}\``).join(", ")
+                    : "none";
+                  const missing = automation.missing_connectors?.length
+                    ? ` • missing ${automation.missing_connectors.map((item) => `\`${item}\``).join(", ")}`
+                    : "";
+                  return `  - **${automation.name}** (\`${automation.id}\`) • ${automation.enabled ? "enabled" : "paused"} • ${automation.schedule_cron ?? "manual"} • ${automation.last_status ?? "idle"}\n    connectors: ${connectors}${missing}`;
+                });
+                info(`**Automations (${payload.automations.length})**\n\n${lines.join("\n\n")}\n\nUse \`/automations templates\`, \`/automations connectors\`, \`/automations run <name>\`, or \`/automations logs\`.`);
+              } catch (e: any) {
+                info(`Error loading automations: ${e.message}`);
+              }
+              return;
+            }
+
+            if (sub === "templates") {
+              try {
+                const payload = await cmdListAutomations();
+                const lines = payload.templates.map((template) =>
+                  `  - **${template.name}** (\`${template.key}\`)\n    ${template.description}\n    connectors: ${template.recommended_connectors.map((item) => `\`${item}\``).join(", ")} • default: \`${template.default_cron}\``
+                );
+                info(`**Automation Templates (${payload.templates.length})**\n\n${lines.join("\n\n")}`);
+              } catch (e: any) {
+                info(`Error loading templates: ${e.message}`);
+              }
+              return;
+            }
+
+            if (sub === "connectors") {
+              try {
+                const connectors = await cmdListAutomationConnectors();
+                const connected = connectors.connected.length
+                  ? connectors.connected.map((connector) => `  - **${connector.display_name}** • ${connector.enabled ? "enabled" : "disabled"} • ${connector.account_label ?? connector.connection_status}`).join("\n")
+                  : "  - none yet";
+                const catalog = connectors.available.map((connector) =>
+                  `  - **${connector.display_name}** (\`${connector.provider}\`) • ${connector.connected ? "connected" : connector.coming_soon ? "coming soon" : "available"} • ${connector.oauth_supported ? "OAuth" : "manual later"}`
+                ).join("\n");
+                info(`**Connected Applications**\n${connected}\n\n**Connector Catalog**\n${catalog}\n\nUse \`/automations connect <provider>\` or \`/automations toggle <provider> on|off\`.`);
+              } catch (e: any) {
+                info(`Error loading connectors: ${e.message}`);
+              }
+              return;
+            }
+
+            if (sub === "connect") {
+              const provider = args[1]?.toLowerCase();
+              if (!provider) {
+                info("Usage: `/automations connect <provider>`\n\nExample: `/automations connect github`");
+                return;
+              }
+              try {
+                const oauth = await cmdStartAutomationOAuth(provider);
+                try {
+                  await openExternalUrl(oauth.auth_url);
+                  info(`Opened your browser for **${provider}** OAuth. Finish the sign-in flow, then run \`/automations connectors\`.`);
+                } catch {
+                  info(`Open this URL to finish **${provider}** OAuth:\n\n${oauth.auth_url}`);
+                }
+              } catch (e: any) {
+                info(`Could not start ${provider} OAuth: ${e.message}`);
+              }
+              return;
+            }
+
+            if (sub === "toggle") {
+              const provider = args[1]?.toLowerCase();
+              const state = args[2]?.toLowerCase();
+              if (!provider || !state || !["on", "off"].includes(state)) {
+                info("Usage: `/automations toggle <provider> on|off>`");
+                return;
+              }
+              try {
+                await cmdToggleAutomationConnector(provider, state === "on");
+                info(`Connector \`${provider}\` is now ${state === "on" ? "enabled" : "disabled"}.`);
+              } catch (e: any) {
+                info(`Could not toggle connector: ${e.message}`);
+              }
+              return;
+            }
+
+            if (["run", "delete", "remove"].includes(sub)) {
+              const identifier = args.slice(1).join(" ").trim();
+              if (!identifier) {
+                info(`Usage: \`/automations ${sub} <name-or-id>\``);
+                return;
+              }
+              try {
+                const { automations } = await cmdListAutomations();
+                const automation = findAutomationByIdentifier(automations, identifier);
+                if (!automation) {
+                  info(`Automation not found: \`${identifier}\``);
+                  return;
+                }
+                if (sub === "run") {
+                  const result = await cmdRunAutomation(automation.id);
+                  info(`▶ ${result.message} for **${automation.name}**.`);
+                } else {
+                  const result = await cmdDeleteAutomation(automation.id);
+                  info(`🗑 ${result.message} — **${automation.name}** removed.`);
+                }
+              } catch (e: any) {
+                info(`Automation command failed: ${e.message}`);
+              }
+              return;
+            }
+
+            if (sub === "logs") {
+              try {
+                let automation: AutomationRecord | undefined;
+                const identifier = args.slice(1).join(" ").trim();
+                if (identifier) {
+                  const payload = await cmdListAutomations();
+                  automation = findAutomationByIdentifier(payload.automations, identifier);
+                  if (!automation) {
+                    info(`Automation not found: \`${identifier}\``);
+                    return;
+                  }
+                }
+                const logs = await cmdListAutomationLogs(automation?.id);
+                if (!logs.length) {
+                  info("No automation logs yet. Run an automation or wait for its cron schedule to fire.");
+                  return;
+                }
+                const lines = logs.slice(0, 20).map((log) =>
+                  `  - **${log.status.toUpperCase()}** • ${new Date(log.started_at).toLocaleString()} • ${log.summary ?? "no summary"}`
+                );
+                info(`**Automation Logs${automation ? ` — ${automation.name}` : ""}**\n\n${lines.join("\n")}`);
+              } catch (e: any) {
+                info(`Error loading logs: ${e.message}`);
+              }
+              return;
+            }
+
+            if (sub === "cron" || sub === "jobs") {
+              try {
+                const jobs = await cmdListAutomationCronJobs();
+                if (!jobs.length) {
+                  info("No scheduled automation jobs yet. Create one with `/automations create`. ");
+                  return;
+                }
+                const lines = jobs.map((job) =>
+                  `  - **${job.automation_name}** • \`${job.schedule_cron}\` (${job.schedule_timezone}) • ${job.enabled ? "enabled" : "paused"}${job.next_run_at ? ` • next ${new Date(job.next_run_at).toLocaleString()}` : ""}`
+                );
+                info(`**Automation Cron Jobs (${jobs.length})**\n\n${lines.join("\n")}`);
+              } catch (e: any) {
+                info(`Error loading cron jobs: ${e.message}`);
+              }
+              return;
+            }
+
+            info("**Automation subcommands:**\n\n  `/automations list`\n  `/automations templates`\n  `/automations create`\n  `/automations connectors`\n  `/automations connect <provider>`\n  `/automations toggle <provider> on|off`\n  `/automations cron`\n  `/automations logs [name-or-id]`\n  `/automations run <name-or-id>`\n  `/automations delete <name-or-id>`");
+            return;
+          }
+
           case "/mcp": {
             const sub = args[0];
             if (!sub || sub === "list") {
@@ -1370,7 +1687,7 @@ After writing the file, summarize the key points here in the chat.`;
               userPrompt: effectivePrompt,
               userId: token ?? "anonymous",
               userPlan: plan ?? "free",
-              isYolo: useStore.getState().permissionMode === "bypass" || useStore.getState().permissionMode === "auto-accept",
+              isYolo: useStore.getState().permissionMode === "auto-accept",
               privacyMode: useStore.getState().privacyMode,
               figmaUrl,
             });
@@ -1434,7 +1751,7 @@ After writing the file, summarize the key points here in the chat.`;
                     userPrompt: pakPrompt,
                     userId: token ?? "anonymous",
                     userPlan: plan ?? "free",
-                    isYolo: useStore.getState().permissionMode === "bypass" || useStore.getState().permissionMode === "auto-accept",
+                    isYolo: useStore.getState().permissionMode === "auto-accept",
                     privacyMode: useStore.getState().privacyMode,
                   };
                   pendingOverwriteRef.current = launchCfg;
@@ -1448,7 +1765,7 @@ After writing the file, summarize the key points here in the chat.`;
               userPrompt: pakPrompt,
               userId: token ?? "anonymous",
               userPlan: plan ?? "free",
-              isYolo: useStore.getState().permissionMode === "bypass" || useStore.getState().permissionMode === "auto-accept",
+              isYolo: useStore.getState().permissionMode === "auto-accept",
               privacyMode: useStore.getState().privacyMode,
             });
             return;
@@ -1478,42 +1795,43 @@ After writing the file, summarize the key points here in the chat.`;
                 info(`❌ Could not set model: ${e.message}`);
               }
             } else {
-              // List models inline
-              try {
-                const api = (await import("@/api/client.js")).getApiClient();
-                const userPlanCurrent = plan ?? "free";
-                const res = await api.get<{ models: Array<{ model_id: string; name: string; context_window: number; pricing_tier: string; remaining_pct?: number }> }>("/models");
-                const allModels = res.data.models ?? [];
-                const visible = userPlanCurrent === "pro" ? allModels : allModels.filter((m) => m.pricing_tier === "free");
-                if (!visible.length) {
-                  info("No models available. Model cache may be refreshing — try again in a moment.");
-                  return;
-                }
-                const ctx = (n: number) => n >= 1000 ? `${Math.round(n / 1000)}K` : `${n}`;
-                const lines = visible.map(
-                  (m) => `  \`${m.model_id}\`  ${ctx(m.context_window)} ctx${typeof m.remaining_pct === "number" ? ` [${m.remaining_pct}% remaining]` : ""}${m.pricing_tier === "pro" ? " [PRO]" : ""}`
-                );
-                if (userPlanCurrent !== "pro" && allModels.some((m) => m.pricing_tier === "pro")) {
-                  lines.push("", "  _Upgrade to Pro to unlock all models — /upgrade_");
-                }
-                info(`**Available Models** (${visible.length}):\n\n${lines.join("\n")}\n\nTo switch: \`/models <model-id>\``)
-              } catch (e: any) {
-                info(`Failed to fetch models: ${e.message}`);
-              }
+              setShowModelsScreen(true);
             }
             return;
           }
 
           case "/model": {
+
+      let resolvedModelId = effectiveModelId;
+      if (!resolvedModelId) {
+        await useStore.getState().refreshModels(process.env.PAKALON_API_URL, token ?? undefined, true);
+        const storeState = useStore.getState() as any;
+        const fallbackModelId = storeState.availableModels?.[0]?.id as string | undefined;
+        const latestModelsError = storeState.modelsError as string | null;
+        if (fallbackModelId) {
+          setSelectedModel(fallbackModelId);
+          resolvedModelId = fallbackModelId;
+        } else {
+          info(
+            latestModelsError
+              ? `Model list could not be loaded: ${latestModelsError}`
+              : "Model list is still loading. Please wait a moment or run `/models` to refresh the available models.",
+          );
+          return;
+        }
+      }
             const modelArg = args.join(" ").trim();
             if (!modelArg) {
-              info("Usage: `/model <id|auto>` · aliases to `/models`.\n\nExamples:\n  `/model openai/gpt-4o-mini`\n  `/model auto`");
+              info(`Usage: \`/model <id|auto>\` · aliases to \`/models\`.\n\nExamples:\n  \`/model ${DEFAULT_FREE_MODEL_ID}\`\n  \`/model auto\``);
               return;
             }
             if (modelArg.toLowerCase() === "auto") {
               try {
-                const auto = await getApiClient().get<{ model_id: string; name?: string }>("/models/auto");
-                const mId = auto.data.model_id;
+                const auto = await getApiClient().get<{ id?: string; model_id?: string; name?: string }>("/models/auto");
+                const mId = auto.data.id ?? auto.data.model_id;
+                if (!mId) {
+                  throw new Error("Auto model payload did not include an id.");
+                }
                 setSelectedModel(mId);
                 info(`✓ Auto-selected model: **${auto.data.name ?? mId}** (\`${mId}\`)`);
               } catch (e: any) {
@@ -2204,7 +2522,7 @@ After writing the file, summarize the key points here in the chat.`;
             const readOnlyTools = { readFile: allTools.readFile, listDir: allTools.listDir };
             const exploreSystem = `${BASE_SYSTEM}\n\n## EXPLORE MODE\nYou are in read-only explore mode. Do NOT write, edit, delete, or modify any files. Only read and explain the codebase. Answer the user's question with code references.`;
             await handleStream({
-              model: selectedModel ?? "openai/gpt-4o-mini",
+              model: effectiveModelId ?? defaultModel ?? fallbackModel ?? DEFAULT_FREE_MODEL_ID,
               messages: trimToContextWindow(exploreMsgs, 60000),
               apiKey: localKey || undefined,
               authToken: useProxy ? (token ?? undefined) : undefined,
@@ -2446,8 +2764,8 @@ After writing the file, summarize the key points here in the chat.`;
               "  /enterprise notion setup --token <tok> [--workspace <name>]",
               "  /enterprise notion remove|status",
               "",
-              "**Modes (Tab to cycle):** plan | edit | auto-accept | bypass",
-              "**Keys:**  Tab=cycle mode  ⇧Tab=thinking  ^O=verbose  ^F=stop  ^T=tasks  ^R=history  ^C=exit",
+              "**Modes (Shift+Tab to cycle):** plan | auto-accept | orchestration | normal",
+              "**Keys:**  ⇧Tab=cycle mode  ^O=verbose  ^F=stop  ^T=tasks  ^R=history  ^C=exit",
               "",
               "**New commands:**",
               "  /diff [ref]          — show uncommitted changes (colorized git diff)",
@@ -2747,6 +3065,9 @@ After writing the file, summarize the key points here in the chat.`;
               }
               return;
             }
+
+            info(`Unknown command: \`${cmd}\`\n\nUse \`/keybindings\` to see shortcuts or type a normal message to chat.`);
+            return;
           }
 
           case "/keybindings": {
@@ -2754,8 +3075,7 @@ After writing the file, summarize the key points here in the chat.`;
               "**── Keyboard Shortcuts ──**",
               "",
               "**General**",
-              "  Tab            — cycle permission mode (plan→edit→auto-accept→bypass)",
-              "  Shift+Tab      — toggle extended thinking",
+              "  Shift+Tab      — cycle permission mode (plan→auto-accept→orchestration→normal)",
               "  Ctrl+C         — exit / cancel current prompt",
               "  Ctrl+L         — clear screen",
               "",
@@ -3085,7 +3405,14 @@ After writing the file, summarize the key points here in the chat.`;
         : outputStyle === "learning"
         ? "\n\n**Response style: LEARNING** — Explain your reasoning step-by-step. Include definitions and analogies."
         : ""; // explanatory is default — no special instruction needed
-      const system = buildSystemWithContext(effectiveBase + dirNote + memoryBlock + outputStyleGuide, []);
+      const modeBehaviorGuide = permissionMode === "plan"
+        ? "\n\n**Interaction mode: PLAN** — focus on planning, sequencing, and architecture. Avoid autonomous tool-driven changes."
+        : permissionMode === "auto-accept"
+        ? "\n\n**Interaction mode: AUTO ACCEPT** — you may edit files and run commands autonomously when needed."
+        : permissionMode === "orchestration"
+        ? "\n\n**Interaction mode: ORCHESTRATION** — act as a brainstorming and Q&A assistant. Do not use tools or modify files."
+        : "\n\n**Interaction mode: NORMAL** — inspect the project when needed, but every tool action should wait for explicit user approval in the interface.";
+      const system = buildSystemWithContext(effectiveBase + dirNote + memoryBlock + outputStyleGuide + modeBehaviorGuide, []);
 
       // Merge built-in agent tools with dynamically loaded MCP tools
       let mergedTools: ToolSet = { ...allTools, ...mcpToolsRef.current };
@@ -3121,6 +3448,9 @@ After writing the file, summarize the key points here in the chat.`;
           mergedTools = relevantTools;
         }
       }
+      if (permissionMode === "orchestration") {
+        mergedTools = {};
+      }
       // T-HK-03: Wrap each tool's execute() with PreToolUse hook.
       // Hooks can block execution or rewrite tool input via decision.updatedInput.
       mergedTools = wrapToolsWithPreToolUseHook(mergedTools, projectDir ?? undefined, activeSessionId ?? undefined) as ToolSet;
@@ -3132,7 +3462,7 @@ After writing the file, summarize the key points here in the chat.`;
       const useProxy = !localKey || process.env.PAKALON_USE_PROXY === "1";
 
       await handleStream({
-        model: selectedModel ?? "openai/gpt-4o-mini",
+        model: effectiveModelId ?? defaultModel ?? fallbackModel ?? DEFAULT_FREE_MODEL_ID,
         messages: trimmed,
         apiKey: localKey || undefined,
         authToken: useProxy ? (token ?? undefined) : undefined,
@@ -3317,7 +3647,7 @@ After writing the file, summarize the key points here in the chat.`;
     };
   }, [token, setRemainingPct]);
 
-  // Keyboard shortcuts: Ctrl+C, Tab (cycle mode), Shift+Tab (toggle thinking)
+  // Keyboard shortcuts: Ctrl+C
   // T-CLI-51: Ctrl+B (background bash hint), T-CLI-52: Ctrl+F (kill stream),
   // T-CLI-53: Ctrl+T (task panel toggle)
   useInput((_input, key) => {
@@ -3329,15 +3659,6 @@ After writing the file, summarize the key points here in the chat.`;
         if (_summary) saveMemoryFile(_summary, projectDir, { append: true });
       } catch { /* non-fatal */ }
       exit();
-    }
-    // Tab — cycle permission mode: plan → edit → auto-accept → bypass → plan
-    if (key.tab && !key.shift && !isStreaming) {
-      cyclePermissionMode();
-    }
-    // Shift+Tab — toggle extended thinking
-    if (key.tab && key.shift && !isStreaming) {
-      toggleThinking();
-      info(thinkingEnabled ? "Extended thinking **disabled**" : "Extended thinking **enabled**");
     }
     // T-CLI-53: Ctrl+T — toggle task / checkpoint panel
     if (key.ctrl && _input === "t") {
@@ -3423,18 +3744,30 @@ After writing the file, summarize the key points here in the chat.`;
     }
   });
 
+  if (showModelsScreen) {
+    return (
+      <ModelsScreen
+        onBack={() => setShowModelsScreen(false)}
+        onSelect={(modelId) => {
+          setShowModelsScreen(false);
+          info(`✓ Model switched to **${modelId}**`);
+        }}
+      />
+    );
+  }
+
   return (
     <Box flexDirection="column" height="100%">
       {showBanner && <Banner plan={plan ?? undefined} githubLogin={githubLogin ?? undefined} modelId={selectedModel} />}
       {process.env["PAKALON_TEAMMATE_MODE"] === "1" && (
         <Box paddingX={1} borderStyle="single" borderColor="cyan">
-          <Text color="cyan" bold>👥 Teammate Mode — </Text>
+          <Text color="cyan" bold>Teammate Mode — </Text>
           <Text color="cyan">read-only · AI will propose changes but not apply them</Text>
         </Box>
       )}
       {process.env["PAKALON_IDE_MODE"] && process.env["PAKALON_IDE_MODE"] !== "none" && (
         <Box paddingX={1}>
-          <Text dimColor>🖥  IDE: </Text>
+          <Text dimColor>IDE: </Text>
           <Text color="green">{process.env["PAKALON_IDE_MODE"]}</Text>
         </Box>
       )}
@@ -3447,15 +3780,6 @@ After writing the file, summarize the key points here in the chat.`;
           <Text dimColor>{thinkContent}</Text>
         </Box>
       ) : null}
-      <ContextBar
-        projectDir={projectDir}
-        remainingPct={remainingPct ?? undefined}
-        tokenCount={sessionTokensUsed}
-        contextLimit={sessionContextLimit}
-        isStreaming={isStreaming}
-        creditsRemaining={creditBalance?.credits_remaining}
-        creditsTotal={creditBalance?.credits_total}
-      />
       {/* T3-15: Token budget & spend warnings */}
       <TokenBudgetWarning
         tokensUsed={sessionTokensUsed}
@@ -3508,7 +3832,7 @@ After writing the file, summarize the key points here in the chat.`;
       {/* T-CLI-53: Ctrl+T task / checkpoint panel */}
       {showTaskPanel && (
         <Box borderStyle="single" borderColor="yellow" flexDirection="column" paddingX={1}>
-          <Text bold color="yellow">📋 Checkpoints (Ctrl+T to close)</Text>
+          <Text bold color="yellow">Checkpoints (Ctrl+T to close)</Text>
           {undoManager.getCheckpoints().length === 0 ? (
             <Text dimColor>No checkpoints yet. Use `/update &lt;task&gt;` to create one.</Text>
           ) : (
@@ -3526,11 +3850,11 @@ After writing the file, summarize the key points here in the chat.`;
             <>
               <Text bold color="yellow">─── LSP Diagnostics ({lspDiagnostics.length})</Text>
               {lspDiagnostics.slice(0, 10).map((d, i) => {
-                const sev = d.severity === "error" ? "🔴" : d.severity === "warning" ? "🟡" : "🔵";
+                const sev = d.severity === "error" ? "error" : d.severity === "warning" ? "warn" : "info";
                 const shortPath = d.filePath ? d.filePath.split(/[\\/]/).slice(-2).join("/") : "";
                 return (
                   <Text key={i}>
-                    <Text>{sev} </Text>
+                    <Text color={d.severity === "error" ? "red" : d.severity === "warning" ? "yellow" : "blue"}>{sev} </Text>
                     <Text dimColor>{shortPath}{d.line ? `:${d.line}` : ""} </Text>
                     <Text>{d.message.slice(0, 80)}{d.message.length > 80 ? "…" : ""}</Text>
                   </Text>
@@ -3544,14 +3868,12 @@ After writing the file, summarize the key points here in the chat.`;
       {/* T-CLI-51: Background tasks sidebar — shown when tasks exist */}
       {backgroundTasks.length > 0 && (
         <Box borderStyle="single" borderColor="blue" flexDirection="column" paddingX={1}>
-          <Text bold color="blue">⚙ Background Tasks (Ctrl+B to spawn · Ctrl+F to kill stream)</Text>
+          <Text bold color="blue">Background Tasks (Ctrl+B to spawn · Ctrl+F to stop streaming)</Text>
           {backgroundTasks.slice(-5).map((t) => (
             <Box key={t.id} flexDirection="column">
               <Text>
-                <Text color={t.status === "running" ? "yellow" : t.status === "done" ? "green" : "red"}>
-                  {t.status === "running" ? "⏳" : t.status === "done" ? "✅" : "❌"}
-                </Text>
-                <Text> </Text>
+                <Text color={t.status === "running" ? "yellow" : t.status === "done" ? "green" : "red"}>{t.status}</Text>
+                <Text>  </Text>
                 <Text bold>{t.cmd.slice(0, 50)}</Text>
                 {t.exitCode !== undefined && <Text dimColor> (exit {t.exitCode})</Text>}
               </Text>
@@ -3566,7 +3888,7 @@ After writing the file, summarize the key points here in the chat.`;
       {/* T-CLI-51: Ctrl+B input overlay — type a command then Enter to spawn it in background */}
       {showBashOverlay && (
         <Box borderStyle="round" borderColor="magenta" flexDirection="column" paddingX={1}>
-          <Text bold color="magenta">⚙ Background Bash (Enter to run · Esc to cancel)</Text>
+          <Text bold color="magenta">Background Bash (Enter to run · Esc to cancel)</Text>
           <Box>
             <Text color="magenta">$ </Text>
             <Text>{bashOverlayCmd ?? ""}</Text>
@@ -3587,7 +3909,7 @@ After writing the file, summarize the key points here in the chat.`;
           : deduped;
         return (
           <Box borderStyle="round" borderColor="cyan" flexDirection="column" paddingX={1}>
-            <Text bold color="cyan">⌃R History Search — type to filter, Enter to fill, Esc to close</Text>
+            <Text bold color="cyan">History Search — type to filter, Enter to fill, Esc to close</Text>
             <Box>
               <Text color="cyan">Search: </Text>
               <Text>{historySearch || " "}</Text>

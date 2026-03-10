@@ -1,6 +1,5 @@
 /**
- * StatusLine — bottom bar showing model, plan, permission mode, session info,
- * live token counter (Epic A-01), and git branch + PR/CI status (T-CLI-58).
+ * StatusLine — compact mode row shown below the input.
  *
  * T-CLI-STATUS-LINE: Supports a scriptable statusLine.command config option.
  * When set, the command is executed periodically and its stdout is appended
@@ -12,7 +11,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
 import path from "path";
-import { useStore } from "@/store/index.js";
+import { useFileChanges, useStore } from "@/store/index.js";
 import type { InteractionMode, PermissionMode } from "@/store/slices/mode.slice.js";
 
 const execFileAsync = promisify(execFile);
@@ -119,18 +118,18 @@ async function runStatusLineCommand(command: string, cwd?: string): Promise<stri
   }
 }
 
-const CI_STATUS_ICON: Record<NonNullable<CiStatus>, string> = {
-  pending: "◔",
-  success: "✓",
-  failure: "✗",
-  cancelled: "⊘",
-};
-
 const CI_STATUS_COLOR: Record<NonNullable<CiStatus>, string> = {
   pending: "yellow",
   success: "green",
   failure: "red",
   cancelled: "gray",
+};
+
+const CI_STATUS_LABEL: Record<NonNullable<CiStatus>, string> = {
+  pending: "pending",
+  success: "ok",
+  failure: "failed",
+  cancelled: "stopped",
 };
 
 interface StatusLineProps {
@@ -154,9 +153,16 @@ interface StatusLineProps {
 
 const PERMISSION_MODE_COLORS: Record<PermissionMode, string> = {
   plan: "blue",
-  edit: "yellow",
   "auto-accept": "green",
-  bypass: "red",
+  orchestration: "yellow",
+  normal: "white",
+};
+
+const PERMISSION_MODE_LABELS: Record<PermissionMode, string | null> = {
+  plan: "Plan",
+  "auto-accept": "Auto-accept",
+  orchestration: "Orchestration",
+  normal: "Normal",
 };
 
 const StatusLine: React.FC<StatusLineProps> = ({
@@ -173,8 +179,7 @@ const StatusLine: React.FC<StatusLineProps> = ({
   projectDir,
 }) => {
   const permissionMode = useStore((s) => s.permissionMode);
-  const thinkingEnabled = useStore((s) => s.thinkingEnabled);
-  const verbose = useStore((s) => s.verbose);
+  const { sessionLinesAdded, sessionLinesDeleted, changedFiles } = useFileChanges();
 
   // T-CLI-58: Git branch + PR/CI status — polled every 30s
   const [gitInfo, setGitInfo] = useState<GitBranchInfo>({ branch: null, prNumber: null, ciStatus: null });
@@ -203,121 +208,32 @@ const StatusLine: React.FC<StatusLineProps> = ({
     return () => clearInterval(id);
   }, [projectDir]);
 
-  // Flashing alert state for near-limit context (> 85%)
-  const [flashOn, setFlashOn] = useState(true);
-  const usedPct =
-    estimatedTokens && contextLimit && contextLimit > 0
-      ? Math.round((estimatedTokens / contextLimit) * 100)
-      : null;
-  const isNearLimit = usedPct !== null && usedPct >= 85;
-  const isExhausted = usedPct !== null && usedPct >= 100;
-
-  useEffect(() => {
-    if (!isNearLimit) return;
-    const id = setInterval(() => setFlashOn((v) => !v), 1000);
-    return () => clearInterval(id);
-  }, [isNearLimit]);
-
-  const tokenColor = isExhausted
-    ? "red"
-    : isNearLimit
-    ? flashOn ? "red" : "yellow"
-    : usedPct !== null && usedPct >= 60
-    ? "yellow"
-    : "green";
-
-  const modeColor: Record<InteractionMode, string> = {
-    chat: "green",
-    agent: "yellow",
-    headless: "blue",
-  };
+  const visibleModeLabel = PERMISSION_MODE_LABELS[permissionMode];
 
   return (
-    <Box
-      borderStyle="single"
-      borderColor="gray"
-      paddingX={1}
-      justifyContent="space-between"
-    >
-      <Box gap={2}>
-        {/* Interaction mode */}
-        <Text color={modeColor[mode] ?? "white"}>
-          [{mode.toUpperCase()}]
-        </Text>
-
-        {/* Permission mode (T-CLI-18) */}
+    <Box paddingX={1} gap={2} marginTop={0} flexWrap="wrap">
+      {visibleModeLabel && (
         <Text color={PERMISSION_MODE_COLORS[permissionMode]} bold>
-          {permissionMode.toUpperCase()}
+          {visibleModeLabel}
         </Text>
-
-        {/* Thinking mode indicator (T-CLI-19) */}
-        {thinkingEnabled && <Text color="magenta">🧠</Text>}
-
-        {/* Privacy mode indicator (M-02) */}
-        {privacyMode && <Text color="cyan">🔒</Text>}
-
-        {/* Verbose indicator (T164) */}
-        {verbose && <Text color="gray">VERBOSE</Text>}
-
-        {/* Model name — show default if no session model (US-A) */}
-        {(modelId || defaultModel) && (
-          <Text dimColor>
-            {(() => {
-              const m = modelId ?? defaultModel ?? "";
-              return m.length > 40 ? `...${m.slice(-37)}` : m;
-            })()}
-          </Text>
-        )}
-
-        {/* T-CLI-58: Git branch + PR CI indicator */}
-        {gitInfo.branch && (
-          <Text color="cyan">
-            ⎇ {gitInfo.branch}
-            {gitInfo.prNumber ? ` #${gitInfo.prNumber}` : ""}
-            {gitInfo.ciStatus ? ` ${CI_STATUS_ICON[gitInfo.ciStatus]}` : ""}
-          </Text>
-        )}
-
-        {/* Live token counter (Epic A-01) */}
-        {estimatedTokens !== undefined && contextLimit !== undefined && contextLimit > 0 && (
-          <Text color={tokenColor}>
-            {isExhausted
-              ? `⛔ ${(estimatedTokens / 1000).toFixed(1)}k / ${(contextLimit / 1000).toFixed(0)}k (FULL)`
-              : `${(estimatedTokens / 1000).toFixed(1)}k / ${(contextLimit / 1000).toFixed(0)}k (${usedPct}%)`}
-          </Text>
-        )}
-
-        {/* Streaming indicator */}
-        {isStreaming && <Text color="cyan">◉ streaming</Text>}
-      </Box>
-
-      <Box gap={2}>
-        {/* T-CLI-STATUS-LINE: Scriptable command output */}
-        {scriptOutput && (
-          <Text color="gray">{scriptOutput}</Text>
-        )}
-
-        {/* Message count */}
-        {messageCount > 0 && (
-          <Text dimColor>{messageCount} msg{messageCount !== 1 ? "s" : ""}</Text>
-        )}
-
-        {/* Plan indicator */}
-        {plan && (
-          <Text color={plan === "pro" ? "yellow" : "white"}>
-            {plan.toUpperCase()}
-          </Text>
-        )}
-
-        {/* Trial days warning */}
-        {trialDaysRemaining !== null &&
-          trialDaysRemaining !== undefined &&
-          trialDaysRemaining <= 5 && (
-            <Text color={trialDaysRemaining <= 2 ? "red" : "yellow"}>
-              ⚠ {trialDaysRemaining}d trial
-            </Text>
-          )}
-      </Box>
+      )}
+      {messageCount > 0 && <Text dimColor>session {messageCount} msg{messageCount !== 1 ? "s" : ""}</Text>}
+      {(sessionLinesAdded > 0 || sessionLinesDeleted > 0) && (
+        <>
+          <Text dimColor>changes</Text>
+          <Text color="greenBright">+{sessionLinesAdded}</Text>
+          <Text color="redBright">-{sessionLinesDeleted}</Text>
+          <Text dimColor>{changedFiles.length} file{changedFiles.length !== 1 ? "s" : ""}</Text>
+        </>
+      )}
+      {scriptOutput && <Text dimColor>{scriptOutput}</Text>}
+      {gitInfo.ciStatus && <Text dimColor>ci:{CI_STATUS_LABEL[gitInfo.ciStatus]}</Text>}
+      {isStreaming && <Text color="cyan">live</Text>}
+      {privacyMode && <Text dimColor>private</Text>}
+      {trialDaysRemaining !== null && trialDaysRemaining !== undefined && trialDaysRemaining <= 5 && (
+        <Text color={trialDaysRemaining <= 2 ? "red" : "yellow"}>{trialDaysRemaining}d trial</Text>
+      )}
+      {mode !== "chat" && <Text dimColor>{mode}</Text>}
     </Box>
   );
 };

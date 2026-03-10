@@ -1,12 +1,13 @@
 """
 graph.py — Phase 4 LangGraph StateGraph: Security QA Agent.
-6 sub-agents running in sequence:
-  SA1: sast_scan — static analysis (writes subagent-1.md)
-  SA2: dast_scan — dynamic analysis + Vercel browser tests (writes subagent-2.md)
-  SA3: requirement_check — verify implementations (writes subagent-3.md)
-  SA4: cicd_testing — CI/CD pipeline security & best practices (writes subagent-4.md)
-  SA5: cyber_security — active attack simulation (writes subagent-5.md)
-  SA6: generate_reports_and_fixes — XML/HTML reports + LLM fix suggestions + phase-4.md
+7 sub-agents running in sequence:
+  SA1: hoppscotch_api_test — Hoppscotch + httpx API security testing (writes subagent-1.md)
+  SA2: sast_scan — static analysis (writes subagent-2.md)
+  SA3: dast_scan — dynamic analysis + Vercel browser tests (writes subagent-3.md)
+  SA4: requirement_check — verify implementations (writes subagent-4.md)
+  SA5: cicd_testing — CI/CD pipeline security & best practices (writes subagent-5.md)
+  SA6: cyber_security — active attack simulation (writes subagent-6.md)
+  SA7: generate_reports_and_fixes — XML/HTML reports + LLM fix suggestions + phase-4.md
 """
 from __future__ import annotations
 
@@ -21,6 +22,7 @@ try:
 except ImportError:
     LANGGRAPH_AVAILABLE = False
 
+from .hoppscotch_tester import HoppscotchTester
 from .sast import SASTRunner
 from .dast import DASTRunner
 from .xml_reports import XmlReportGenerator
@@ -38,6 +40,7 @@ class Phase4State(TypedDict, total=False):
     is_yolo: bool
     send_sse: Any
     target_url: str
+    hoppscotch_results: dict
     sast_results: dict
     dast_results: dict
     requirement_results: dict
@@ -49,6 +52,7 @@ class Phase4State(TypedDict, total=False):
     needs_phase3_retry: bool
     retry_count: int  # Track number of Phase 3 retries (max 3)
     phase3_findings: list[dict]  # Findings to send back to Phase 3
+    phase3_validation_results: dict  # T-P4-07: Phase 3 agent_browser + tdd_loop validation data
 
     context_budget: dict | None  # T103: optional ContextBudget.get_all() dict for per-phase max_tokens caps
     _mem0_context: str  # T-A03: Phase 1 context from Mem0
@@ -57,7 +61,36 @@ class Phase4State(TypedDict, total=False):
 # Nodes
 # ------------------------------------------------------------------
 
-async def sa1_sast_scan(state: Phase4State) -> Phase4State:
+async def sa1_hoppscotch_api_test(state: Phase4State) -> Phase4State:
+    """SA1: Hoppscotch + httpx API security testing."""
+    sse = state.get("send_sse") or (lambda e: None)
+    user_plan = state.get("user_plan", "free")
+    project_dir = state.get("project_dir", ".")
+    target = state.get("target_url", "http://localhost:3000")
+    sse({"type": "text_delta", "content": f"🔌 SA1: Hoppscotch API security testing on {target}...\n"})
+    tester = HoppscotchTester(
+        target_url=target,
+        project_dir=project_dir,
+        user_plan=user_plan,
+    )
+    results = await tester.run_all(send_sse=sse)
+    state["hoppscotch_results"] = results
+    summary = results.get("summary", {})
+    sse({
+        "type": "text_delta",
+        "content": (
+            f"  Hoppscotch: {summary.get('total_findings', 0)} findings "
+            f"({summary.get('critical', 0)} critical, {summary.get('high_severity', 0)} high) "
+            f"score={summary.get('security_score', 100)}/100\n"
+        ),
+    })
+    out_dir = get_phase_dir(project_dir, 4)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    tester.write_subagent_md(str(out_dir), results)
+    return state
+
+
+async def sa2_sast_scan(state: Phase4State) -> Phase4State:
     sse = state.get("send_sse") or (lambda e: None)
     user_plan = state.get("user_plan", "free")
     project_dir = state.get("project_dir", ".")
@@ -81,12 +114,12 @@ async def sa1_sast_scan(state: Phase4State) -> Phase4State:
     return state
 
 
-async def sa2_dast_scan(state: Phase4State) -> Phase4State:
+async def sa3_dast_scan(state: Phase4State) -> Phase4State:
     sse = state.get("send_sse") or (lambda e: None)
     user_plan = state.get("user_plan", "free")
     project_dir = state.get("project_dir", ".")
     target = state.get("target_url", "http://localhost:3000")
-    sse({"type": "text_delta", "content": f"🌐 SA2: Running dynamic security analysis on {target}...\n"})
+    sse({"type": "text_delta", "content": f"🌐 SA3: Running dynamic security analysis on {target}...\n"})
     if user_plan != "pro":
         sse({"type": "text_delta", "content": "  ℹ️  Free plan: pro-only tools (OWASP ZAP, Nikto) skipped.\n"})
     runner = DASTRunner(target_url=target, project_dir=project_dir, user_plan=user_plan)
@@ -96,7 +129,7 @@ async def sa2_dast_scan(state: Phase4State) -> Phase4State:
     sse({"type": "text_delta", "content": f"  DAST: {results.get('summary', {}).get('total_findings', 0)} findings ({h} high)\n"})
 
     # T-CLI-14: Vercel Agent Browser testing integration
-    sse({"type": "text_delta", "content": "🤖 SA2: Running Vercel Agent Browser tests...\n"})
+    sse({"type": "text_delta", "content": "🤖 SA3: Running Vercel Agent Browser tests...\n"})
     vercel_results: dict = {}
     try:
         from .vercel_browser import VercelBrowserTester
@@ -108,22 +141,22 @@ async def sa2_dast_scan(state: Phase4State) -> Phase4State:
         sse({"type": "text_delta", "content": f"  Vercel Browser tests skipped: {vb_err}\n"})
     results["vercel_browser"] = vercel_results
 
-    # Write subagent-2.md
+    # Write subagent-3.md
     out_dir = get_phase_dir(project_dir, 4)
     out_dir.mkdir(parents=True, exist_ok=True)
     _write_sa_md(
-        out_dir / "subagent-2.md",
-        "SA2: Dynamic Application Security Testing (DAST)",
+        out_dir / "subagent-3.md",
+        "SA3: Dynamic Application Security Testing (DAST)",
         results.get("summary", {}),
         results.get("findings", []),
     )
     return state
 
 
-async def sa3_requirement_check(state: Phase4State) -> Phase4State:
+async def sa4_requirement_check(state: Phase4State) -> Phase4State:
     sse = state.get("send_sse") or (lambda e: None)
     project_dir = state.get("project_dir", ".")
-    sse({"type": "text_delta", "content": "📋 SA3: Checking requirement coverage...\n"})
+    sse({"type": "text_delta", "content": "📋 SA4: Checking requirement coverage...\n"})
     checker = RequirementChecker(project_dir=project_dir)
     results = checker.run_structured()
     state["requirement_results"] = results
@@ -156,20 +189,20 @@ async def sa3_requirement_check(state: Phase4State) -> Phase4State:
         for it in items if it.get("status") != "pass"
     ]
     _write_sa_md(
-        out_dir / "subagent-3.md",
-        "SA3: Requirement Coverage Check",
+        out_dir / "subagent-4.md",
+        "SA4: Requirement Coverage Check",
         results.get("summary", {}),
         findings,
     )
     return state
 
 
-async def sa4_cicd_testing(state: Phase4State) -> Phase4State:
-    """SA4: CI/CD pipeline security & best practices analysis."""
+async def sa5_cicd_testing(state: Phase4State) -> Phase4State:
+    """SA5: CI/CD pipeline security & best practices analysis."""
     sse = state.get("send_sse") or (lambda e: None)
     project_dir = state.get("project_dir", ".")
     user_plan = state.get("user_plan", "free")
-    sse({"type": "text_delta", "content": "🔧 SA4: Scanning CI/CD pipelines for security issues and best practices...\n"})
+    sse({"type": "text_delta", "content": "🔧 SA5: Scanning CI/CD pipelines for security issues and best practices...\n"})
     tester = CICDTester(project_dir=project_dir, user_plan=user_plan)
     results = tester.run()
     state["cicd_results"] = results
@@ -181,13 +214,13 @@ async def sa4_cicd_testing(state: Phase4State) -> Phase4State:
     return state
 
 
-async def sa5_cyber_security(state: Phase4State) -> Phase4State:
-    """SA5: Active cyber security attack simulation."""
+async def sa6_cyber_security(state: Phase4State) -> Phase4State:
+    """SA6: Active cyber security attack simulation."""
     sse = state.get("send_sse") or (lambda e: None)
     project_dir = state.get("project_dir", ".")
     user_plan = state.get("user_plan", "free")
     target = state.get("target_url", "http://localhost:3000")
-    sse({"type": "text_delta", "content": f"🛡️  SA5: Running cyber security attack simulation on {target}...\n"})
+    sse({"type": "text_delta", "content": f"🛡️  SA6: Running cyber security attack simulation on {target}...\n"})
     if user_plan != "pro":
         sse({"type": "text_delta", "content": "  ℹ️  Free plan: sqlmap and XSStrike (active attack tools) not executed.\n"})
     tester = CyberSecurityTester(target_url=target, project_dir=project_dir, user_plan=user_plan)
@@ -201,10 +234,10 @@ async def sa5_cyber_security(state: Phase4State) -> Phase4State:
     return state
 
 
-async def sa6_generate_reports_and_fixes(state: Phase4State) -> Phase4State:
-    """SA6: Generate XML/HTML reports and LLM fix suggestions."""
+async def sa7_generate_reports_and_fixes(state: Phase4State) -> Phase4State:
+    """SA7: Generate XML/HTML reports and LLM fix suggestions."""
     sse = state.get("send_sse") or (lambda e: None)
-    sse({"type": "text_delta", "content": "📊 SA6: Generating security reports and fix suggestions...\n"})
+    sse({"type": "text_delta", "content": "📊 SA7: Generating security reports and fix suggestions...\n"})
     project_dir = pathlib.Path(state.get("project_dir", "."))
     out_dir = get_phase_dir(project_dir, 4)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -227,6 +260,10 @@ async def sa6_generate_reports_and_fixes(state: Phase4State) -> Phase4State:
 
     # Collect high-severity findings across all agents
     high_findings: list[dict] = []
+    # SA1: Hoppscotch findings
+    for f in state.get("hoppscotch_results", {}).get("findings", []):
+        if f.get("severity", "").upper() in ("HIGH", "CRITICAL"):
+            high_findings.append({**f, "_tool": "hoppscotch"})
     for results_dict in [sast, dast]:
         for tool, data in results_dict.items():
             if tool == "summary" or not isinstance(data, dict):
@@ -279,22 +316,25 @@ async def sa6_generate_reports_and_fixes(state: Phase4State) -> Phase4State:
     cicd_sum = state.get("cicd_results", {}).get("summary", {})
     cyber_sum = state.get("cyber_results", {}).get("summary", {})
 
+    hop_sum = state.get("hoppscotch_results", {}).get("summary", {})
     phase4_md = (
         "# Phase 4: Security & QA\n\n"
         "## Results\n\n"
         "| Check | Total | High Severity | Status |\n"
         "|-------|-------|---------------|--------|\n"
+        f"| Hoppscotch API Tests | {hop_sum.get('total_findings',0)} | {hop_sum.get('critical',0)+hop_sum.get('high_severity',0)} | {'✅' if hop_sum.get('passed', True) else '❌'} ({hop_sum.get('security_score',100)}/100) |\n"
         f"| SAST | {sast_sum.get('total_findings',0)} | {sast_sum.get('high_severity',0)} | {'✅' if sast_sum.get('passed') else '❌'} |\n"
         f"| DAST | {dast_sum.get('total_findings',0)} | {dast_sum.get('high_severity',0)} | {'✅' if dast_sum.get('passed') else '❌'} |\n"
         f"| CI/CD | {len(state.get('cicd_results', {}).get('findings', []))} | — | {'✅' if cicd_sum.get('passed', True) else '❌'} |\n"
         f"| Cyber Security | {cyber_sum.get('total_findings',0)} | {cyber_sum.get('critical',0)+cyber_sum.get('high_severity',0)} | {'✅' if cyber_sum.get('passed', True) else '❌'} ({cyber_sum.get('security_score',100)}/100) |\n"
         f"| Requirements | {req_sum.get('total',0)} | — | {'✅' if req_sum.get('met_threshold') else '❌'} ({req_sum.get('pass_rate',0):.0%}) |\n\n"
         "## Sub-Agent Reports\n\n"
-        "- `phase-4/subagent-1.md` — SAST results\n"
-        "- `phase-4/subagent-2.md` — DAST results\n"
-        "- `phase-4/subagent-3.md` — Requirement coverage\n"
-        "- `phase-4/subagent-4.md` — CI/CD pipeline analysis\n"
-        "- `phase-4/subagent-5.md` — Cyber security attack simulation\n\n"
+        "- `phase-4/subagent-1.md` — Hoppscotch API security tests\n"
+        "- `phase-4/subagent-2.md` — SAST results\n"
+        "- `phase-4/subagent-3.md` — DAST results\n"
+        "- `phase-4/subagent-4.md` — Requirement coverage\n"
+        "- `phase-4/subagent-5.md` — CI/CD pipeline analysis\n"
+        "- `phase-4/subagent-6.md` — Cyber security attack simulation\n\n"
         "## XML/HTML Reports\n\n"
         + "\n".join(f"- `{p}`" for p in paths) + "\n\n"
         "## Machine-readable Summary\n\n"
@@ -306,6 +346,13 @@ async def sa6_generate_reports_and_fixes(state: Phase4State) -> Phase4State:
 
     security_summary = {
         "status": "complete",
+        "hoppscotch": {
+            "total_findings": hop_sum.get("total_findings", 0),
+            "high_or_critical": hop_sum.get("critical", 0) + hop_sum.get("high_severity", 0),
+            "security_score": hop_sum.get("security_score", 100),
+            "endpoints_tested": hop_sum.get("endpoints_tested", 0),
+            "passed": hop_sum.get("passed", True),
+        },
         "sast": {
             "total_findings": sast_sum.get("total_findings", 0),
             "high_severity": sast_sum.get("high_severity", 0),
@@ -457,22 +504,29 @@ def build_phase4_graph() -> Any:
         return None
     graph = StateGraph(Phase4State)
     for name, fn in [
-        ("sa1_sast", sa1_sast_scan),
-        ("sa2_dast", sa2_dast_scan),
-        ("sa3_req", sa3_requirement_check),
-        ("sa4_cicd", sa4_cicd_testing),
-        ("sa5_cyber", sa5_cyber_security),
-        ("sa6_reports", sa6_generate_reports_and_fixes),
+        ("sa1_hoppscotch", sa1_hoppscotch_api_test),
+        ("sa2_sast", sa2_sast_scan),
+        ("sa3_dast", sa3_dast_scan),
+        ("sa4_req", sa4_requirement_check),
+        ("sa5_cicd", sa5_cicd_testing),
+        ("sa6_cyber", sa6_cyber_security),
+        ("sa7_reports", sa7_generate_reports_and_fixes),
     ]:
         graph.add_node(name, fn)
-    graph.set_entry_point("sa1_sast")
-    graph.add_edge("sa1_sast", "sa2_dast")
-    graph.add_edge("sa2_dast", "sa3_req")
-    graph.add_edge("sa3_req", "sa4_cicd")
-    graph.add_edge("sa4_cicd", "sa5_cyber")
-    graph.add_edge("sa5_cyber", "sa6_reports")
-    graph.add_edge("sa6_reports", END)
-    return graph.compile()
+    graph.set_entry_point("sa1_hoppscotch")
+    graph.add_edge("sa1_hoppscotch", "sa2_sast")
+    graph.add_edge("sa2_sast", "sa3_dast")
+    graph.add_edge("sa3_dast", "sa4_req")
+    graph.add_edge("sa4_req", "sa5_cicd")
+    graph.add_edge("sa5_cicd", "sa6_cyber")
+    graph.add_edge("sa6_cyber", "sa7_reports")
+    graph.add_edge("sa7_reports", END)
+    try:
+        from ..shared.langgraph_checkpointer import build_checkpointer  # noqa: PLC0415
+        _ckpt = build_checkpointer()
+    except Exception:
+        _ckpt = None
+    return graph.compile(checkpointer=_ckpt) if _ckpt is not None else graph.compile()
 
 
 def _generate_retry_patch_plan(state: Phase4State) -> dict:
@@ -488,6 +542,23 @@ def _generate_retry_patch_plan(state: Phase4State) -> dict:
     """
     issues: list[dict] = []
     files_to_patch: set[str] = set()
+
+    # SA1: Hoppscotch API security findings
+    hop = state.get("hoppscotch_results", {})
+    for f in hop.get("findings", []):
+        sev = f.get("severity", "LOW")
+        if sev in ("CRITICAL", "HIGH", "MEDIUM"):
+            entry = {
+                "severity": sev,
+                "type": f.get("type", "HOPPSCOTCH_API_FINDING"),
+                "description": f.get("description", ""),
+                "recommendation": f.get("recommendation", "Fix the identified API security vulnerability"),
+                "file_path": f.get("file_path", ""),
+                "source": "hoppscotch",
+            }
+            issues.append(entry)
+            if entry["file_path"]:
+                files_to_patch.add(entry["file_path"])
 
     # SAST findings → map source files
     sast = state.get("sast_results", {})
@@ -548,6 +619,46 @@ def _generate_retry_patch_plan(state: Phase4State) -> dict:
             if f.get("file_path"):
                 files_to_patch.add(f["file_path"])
 
+    # T-P4-07: Include Phase 3 agent_browser + tdd_loop findings for targeted retry guidance
+    p3_val = state.get("phase3_validation_results", {})
+    ab_findings = p3_val.get("agent_browser", {})
+    tdd_findings = p3_val.get("tdd_loop", {})
+
+    # Console errors captured by AgentBrowser in Phase 3 SA4
+    for err in (ab_findings.get("console_errors") or []):
+        issues.append({
+            "severity": "MEDIUM",
+            "type": "BROWSER_CONSOLE_ERROR",
+            "description": str(err),
+            "recommendation": "Fix the JavaScript/runtime error detected during browser validation",
+            "file_path": "",
+            "source": "agent_browser",
+        })
+
+    # Visual diff regression beyond 15% from wireframe baseline
+    visual_diff_pct = float(ab_findings.get("diff_pct", 0) or 0)
+    if visual_diff_pct > 0.15:
+        issues.append({
+            "severity": "HIGH",
+            "type": "VISUAL_DIFF_REGRESSION",
+            "description": f"Visual diff {visual_diff_pct:.1%} vs Phase 2 wireframe baseline exceeds 15% threshold",
+            "recommendation": "Align component layout and styling with Phase 2 wireframe design tokens",
+            "file_path": "",
+            "source": "agent_browser",
+        })
+
+    # TDD loop iteration errors captured in Phase 3
+    for tdd_iter in (tdd_findings.get("iterations") or []):
+        for err in (tdd_iter.get("console_errors") or []):
+            issues.append({
+                "severity": "MEDIUM",
+                "type": "TDD_ITERATION_ERROR",
+                "description": str(err),
+                "recommendation": "Fix the error found during Phase 3 TDD iteration",
+                "file_path": "",
+                "source": "tdd_loop",
+            })
+
     summary_parts = [f"Phase 4 retry patch plan: {len(issues)} issue(s) to fix"]
     if files_to_patch:
         summary_parts.append(f"Files affected: {', '.join(sorted(files_to_patch)[:10])}")
@@ -560,6 +671,9 @@ def _generate_retry_patch_plan(state: Phase4State) -> dict:
         "requirements_missing": requirements_missing,
         "summary": " | ".join(summary_parts),
         "retry_count": state.get("retry_count", 0),
+        # T-P4-07: Pass through raw Phase 3 browser/TDD context for Phase 3 to use as guidance
+        "agent_browser_findings": ab_findings,
+        "tdd_loop_findings": tdd_findings,
     }
 
 
@@ -580,6 +694,14 @@ async def run_phase4(
         _mem0_ctx = retrieve_phase1_context(user_id, project_dir)
     except Exception:
         _mem0_ctx = ""
+    # T-P4-07: Load Phase 3 validation results for retry patch context
+    try:
+        import json as _json_p3  # noqa: PLC0415
+        from ..shared.paths import get_phase_dir as _gpd4  # noqa: PLC0415
+        _val_p3_path = _gpd4(project_dir, 3, create=False) / "phase-3-validation.json"
+        _p3_validation: dict = _json_p3.loads(_val_p3_path.read_text()) if _val_p3_path.exists() else {}
+    except Exception:
+        _p3_validation = {}
     initial: Phase4State = {
         "project_dir": project_dir,
         "target_url": target_url,
@@ -589,44 +711,37 @@ async def run_phase4(
         "send_sse": _sse,
         "context_budget": context_budget,
         "_mem0_context": _mem0_ctx,
+        "phase3_validation_results": _p3_validation,  # T-P4-07
     }
     graph = build_phase4_graph()
+    _user_id4 = state_in.get("user_id", "anonymous")
+    _project_dir4 = state_in.get("project_dir", ".")
     if graph is None:
         state: Any = initial
-        for fn in [sa1_sast_scan, sa2_dast_scan, sa3_requirement_check,
-                   sa4_cicd_testing, sa5_cyber_security, sa6_generate_reports_and_fixes]:
+        for fn in [
+            sa1_hoppscotch_api_test,
+            sa2_sast_scan,
+            sa3_dast_scan,
+            sa4_requirement_check,
+            sa5_cicd_testing,
+            sa6_cyber_security,
+            sa7_generate_reports_and_fixes,
+        ]:
             state = await fn(state)
     else:
-        state = await graph.ainvoke(initial)
-        "_mem0_context": _mem0_ctx,
-    }
-    project_dir: str,
-    target_url: str = "http://localhost:3000",
-    user_id: str = "anonymous",
-    user_plan: str = "free",
-    is_yolo: bool = False,
-    send_sse: Any = None,
-    input_queue: Any = None,
-    context_budget: "dict | None" = None,  # T103: ContextBudget.get_all() dict
-) -> dict[str, Any]:
-    _sse = send_sse or (lambda e: None)
-    initial: Phase4State = {
-        "project_dir": project_dir,
-        "target_url": target_url,
-        "user_id": user_id,
-        "user_plan": user_plan,
-        "is_yolo": is_yolo,
-        "send_sse": _sse,
-        "context_budget": context_budget,
-    }
-    graph = build_phase4_graph()
-    if graph is None:
-        state: Any = initial
-        for fn in [sa1_sast_scan, sa2_dast_scan, sa3_requirement_check,
-                   sa4_cicd_testing, sa5_cyber_security, sa6_generate_reports_and_fixes]:
-            state = await fn(state)
-    else:
-        state = await graph.ainvoke(initial)
+        try:
+            from ..shared.langgraph_checkpointer import thread_config as _tc4  # noqa: PLC0415
+            _cfg4 = _tc4(_user_id4, _project_dir4, phase=4)
+        except Exception:
+            _cfg4 = {}
+        state = await graph.ainvoke(initial, config=_cfg4)
+    # T-RAG-01C: store Phase 4 summary in Mem0
+    try:
+        from ..shared.langgraph_checkpointer import store_phase_mem0  # noqa: PLC0415
+        _p4_score = (state.get("qa_report") or {}).get("overall_score", "N/A")
+        store_phase_mem0(_user_id4, _project_dir4, phase=4, summary=f"QA score: {_p4_score}")
+    except Exception:
+        pass
 
     # T-CLI-23: Re-entry into Phase 3 if requirement coverage is too low
     if state.get("needs_phase3_retry"):
@@ -652,6 +767,10 @@ async def run_phase4(
                 retry_patch_plan=patch_plan,  # Pass targeted patch context
             )
             _sse({"type": "text_delta", "content": f"  Phase 3 retry complete: {len(retry_result.get('outputs_saved', []))} files updated.\n"})
+            # T-P4-07: Update state with fresh Phase 3 validation so subsequent retries have current context
+            fresh_p3_val = retry_result.get("validation", {})
+            if fresh_p3_val:
+                state["phase3_validation_results"] = fresh_p3_val
         except Exception as re_err:
             _sse({"type": "text_delta", "content": f"  Phase 3 re-entry failed: {re_err}\n"})
 
