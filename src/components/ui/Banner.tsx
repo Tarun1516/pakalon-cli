@@ -6,12 +6,15 @@ import React, { useMemo } from "react";
 import { Box, Text } from "ink";
 
 const STATIC_LOGO = `
- ____       _         _
-|  _ \\ __ _| | ____ _| | ___  _ __
-| |_) / _\` | |/ / _\` | |/ _ \\| '_ \\
-|  __/ (_| |   < (_| | | (_) | | | |
-|_|   \\__,_|_|\\_\\__,_|_|\\___/|_| |_|
-`.trim();
+  ▄███████▄  ▄████████  ▄█   ▄█▄    ▄████████  ▄█        ▄██████▄  ███▄▄▄▄   
+  ███    ███ ███    ███ ███ ▄███▀   ███    ███ ███       ███    ███ ███▀▀▀██▄ 
+  ███    ███ ███    ███ ███▐██▀     ███    ███ ███       ███    ███ ███    ███
+  ████████▀  ██████████ █████▀      ██████████ ███       ███    ███ ███    ███
+  ███        ███    ███ ███▀▀██▄    ███    ███ ███       ███    ███ ███    ███
+  ███        ███    ███ ███   ███   ███    ███ ███       ███    ███ ███    ███
+ ▄████▀      ███    ███ ███    ███  ███    ███ ███▌    ▄ ████████▀   ███    ███
+             ███    █▀  ▀████████▀  ███    █▀  █████▄▄██             ▀██████▀ 
+`.replace(/^\n/, "").replace(/\n$/, "");
 
 /** Generate figlet banner synchronously at mount, fall back to static art. */
 function useBannerText(text: string, font?: string): string {
@@ -43,11 +46,11 @@ interface BannerProps {
 }
 
 const Banner: React.FC<BannerProps> = ({ version = "0.1.0", plan, githubLogin, modelId, font }) => {
-  const logoText = useBannerText("pakalon", font);
+  const logoText = STATIC_LOGO;
 
   return (
     <Box flexDirection="column" marginBottom={1}>
-      <Text color="cyan" bold>
+      <Text color="white" backgroundColor="black" bold>
         {logoText}
       </Text>
       <Box gap={2} marginTop={1}>
@@ -55,7 +58,7 @@ const Banner: React.FC<BannerProps> = ({ version = "0.1.0", plan, githubLogin, m
         {githubLogin && (
           <Box gap={1}>
             <Text dimColor>user</Text>
-            <Text color="green" bold>@{githubLogin}</Text>
+            <Text color="#ff8c00" bold>@{githubLogin}</Text>
           </Box>
         )}
         {/* Active model */}

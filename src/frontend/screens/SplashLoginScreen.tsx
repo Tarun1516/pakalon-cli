@@ -26,14 +26,14 @@ import PakalonLogo from "@/frontend/components/PakalonLogo.js";
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Render the 6-character device code as large block characters */
-function BigCode({ code }: { code: string }) {
+function BigCode({ code, compact = false }: { code: string; compact?: boolean }) {
   return (
-    <Box flexDirection="column" alignItems="center" marginY={1}>
+    <Box flexDirection="column" alignItems="center" marginY={compact ? 0 : 1}>
       <Text dimColor>Your device code:</Text>
       <Box
         borderStyle="double"
         borderColor="yellowBright"
-        paddingX={3}
+        paddingX={compact ? 2 : 3}
         paddingY={0}
         marginTop={1}
       >
@@ -41,7 +41,7 @@ function BigCode({ code }: { code: string }) {
           {code.split("").join("  ")}
         </Text>
       </Box>
-      <Text dimColor>(enter this code on the website)</Text>
+      {!compact && <Text dimColor>(enter this code on the website)</Text>}
     </Box>
   );
 }
@@ -65,6 +65,8 @@ const SplashLoginScreen: React.FC<SplashLoginScreenProps> = ({
   showAnimation = false,
   onAuthenticated,
 }) => {
+  const terminalRows = process.stdout.rows ?? 40;
+  const compactLayout = terminalRows < 30;
   const { login } = useAuth();
 
   const [stage, setStage] = useState<Stage>("loading");
@@ -167,7 +169,7 @@ const SplashLoginScreen: React.FC<SplashLoginScreenProps> = ({
     return (
       <Box flexDirection="column" alignItems="center">
         <PakalonLogo variant="splash" />
-        <Box marginTop={1}>
+        <Box marginTop={compactLayout ? 0 : 1}>
           <Spinner label="Preparing secure sign-in…" />
         </Box>
       </Box>
@@ -189,17 +191,11 @@ const SplashLoginScreen: React.FC<SplashLoginScreenProps> = ({
           {(item) => (
             <Box
               key={item.id}
-              borderStyle="round"
-              borderColor="yellowBright"
               flexDirection="column"
               alignItems="center"
-              paddingX={2}
-              paddingY={1}
+              marginBottom={compactLayout ? 0 : 1}
             >
               <PakalonLogo variant="splash" />
-              <Text bold color="whiteBright">
-                Sign in to Pakalon
-              </Text>
             </Box>
           )}
         </Static>
@@ -214,12 +210,16 @@ const SplashLoginScreen: React.FC<SplashLoginScreenProps> = ({
           flexDirection="column"
           alignItems="center"
           paddingX={2}
-          paddingY={1}
-          gap={1}
+          paddingY={compactLayout ? 0 : 1}
+          gap={compactLayout ? 0 : 1}
         >
+          <Text bold color="whiteBright">
+            Sign in to Pakalon
+          </Text>
+
           {/* 6-character code */}
           {codeInfo ? (
-            <BigCode code={codeInfo.code} />
+            <BigCode code={codeInfo.code} compact={compactLayout} />
           ) : (
             <Spinner label="Generating code…" />
           )}
@@ -227,23 +227,27 @@ const SplashLoginScreen: React.FC<SplashLoginScreenProps> = ({
           {/* URL to open */}
           <Box flexDirection="column" alignItems="center">
             <Text>Open this link in your browser to authenticate:</Text>
-            <Box marginTop={1}>
+            <Box marginTop={compactLayout ? 0 : 1}>
               <Text color="yellowBright" bold underline>
                 {codeInfo?.loginUrl ?? "Connecting…"}
               </Text>
             </Box>
-            <Box marginTop={1}>
+            <Box marginTop={compactLayout ? 0 : 1}>
               <Text dimColor>
-                {browserHint ?? "Your browser should open automatically. If it doesn't, use the link below."}
+                {browserHint ?? (compactLayout
+                  ? "If the browser did not open, copy the link above."
+                  : "Your browser should open automatically. If it doesn't, use the link below.")}
               </Text>
             </Box>
-            <Box>
-              <Text dimColor>Log in or create an account, then enter the code above.</Text>
-            </Box>
+            {!compactLayout && (
+              <Box>
+                <Text dimColor>Log in or create an account, then enter the code above.</Text>
+              </Box>
+            )}
           </Box>
 
           {/* Polling status */}
-          <Box marginTop={1}>
+          <Box marginTop={compactLayout ? 0 : 1}>
             {codeInfo ? (
               <Spinner
                 label={`Waiting for confirmation… (${pollAttempt * 3}s elapsed)`}
@@ -272,14 +276,14 @@ const SplashLoginScreen: React.FC<SplashLoginScreenProps> = ({
     return (
       <Box
         borderStyle="round"
-        borderColor="greenBright"
+        borderColor="#ff8c00"
         flexDirection="column"
         alignItems="center"
         paddingX={4}
         paddingY={1}
         gap={1}
       >
-        <Text color="greenBright" bold>
+        <Text color="#ff8c00" bold>
           Authenticated successfully
         </Text>
         <Spinner label="Starting Pakalon…" />

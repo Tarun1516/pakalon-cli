@@ -1,6 +1,11 @@
 /**
  * InputBar — user text input with slash-command detection and @agent autocomplete.
  *
+ * Design: Golden separator line with prompt input
+ * ───────────────────────────────────────────────────────────────
+ * › <input message or /help>
+ * ───────────────────────────────────────────────────────────────
+ *
  * Keyboard shortcuts:
  *   Shift+Tab  → cycle visible interaction mode
  *   Ctrl+O     → toggle verbose panel (T164)
@@ -19,6 +24,8 @@ import { readdirSync, statSync } from "fs";
 import { join, relative, extname } from "path";
 // T-MCP-07: MCP resource mentions
 import { getMcpResources, getMcpPromptCommands } from "@/mcp/manager.js";
+import { PAKALON_GOLD, TEXT_SECONDARY } from "@/constants/colors.js";
+import { getShellWidth, makeHorizontalRule } from "@/utils/shell-layout.js";
 
 // T-CLI-P9: Rich agent suggestion items including description and color
 interface AgentSuggestion {
@@ -39,7 +46,7 @@ function getAgentSuggestions(): AgentSuggestion[] {
     _agentSuggestions = getAllAgents().map((a) => ({
       name: `@${a.name.toLowerCase().replace(/\s+/g, "-")}`,
       description: a.description ?? "",
-      color: a.color ?? "cyan",
+      color: a.color ?? "orange",
     }));
   } catch {
     _agentSuggestions = [];
@@ -55,6 +62,8 @@ function getAgentNames(): string[] {
 // T-CLI-09: Enumerate source files from cwd for @file autocomplete
 const FILE_EXTS = new Set([".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".rs", ".md", ".json", ".yaml", ".yml", ".toml", ".sh", ".env"]);
 const MAX_FILES = 200; // limit scan depth
+let _fileSuggestions: string[] | null = null;
+let _fileScanDir: string | null = null;
 
 function scanFiles(dir: string, base: string, results: string[], depth = 0): void {
   if (depth > 4 || results.length >= MAX_FILES) return;
@@ -179,8 +188,8 @@ function getAllSlashCommands(): string[] {
 }
 
 const PERMISSION_MODE_COLORS: Record<PermissionMode, string> = {
-  plan: "blue",
-  "auto-accept": "green",
+  plan: "orange",
+  "auto-accept": "orange",
   orchestration: "yellow",
   normal: "white",
 };
@@ -194,7 +203,7 @@ interface RichSelectItem {
   agentColor?: string;
 }
 
-const PAKALON_ACCENT_COLOR = "#f59e0b";
+const PAKALON_ACCENT_COLOR = PAKALON_GOLD; // golden accent from design
 
 const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode, projectDir, historyItems }) => {
   const [value, setValue] = useState("");
@@ -681,16 +690,13 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode
     setAtItems([]);
   };
 
-  const modeColor =
+  const prefixColor =
     mode
       ? isDisabled ? "gray" : "cyan"
-      : PERMISSION_MODE_COLORS[permissionMode] ?? "cyan";
+      : PERMISSION_MODE_COLORS[permissionMode] ?? PAKALON_GOLD;
 
-  // T-CLI-80: vim mode indicator color
-  const vimIndicatorColor =
-    vimEditMode === "normal" ? "yellow" : vimEditMode === "visual" ? "magenta" : "green";
-
-  const horizontalRule = "─".repeat(Math.max(24, (process.stdout.columns ?? 80) - 2));
+  const shellWidth = getShellWidth(process.stdout.columns ?? 80);
+  const horizontalRule = makeHorizontalRule(shellWidth);
 
   // T-CLI-80: In vim normal mode, render cursor as highlighted character
   const renderVimNormalInput = () => {
@@ -728,60 +734,71 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode
     <Box flexDirection="column">
       {/* T-CLI-P9: @mention autocomplete dropdown — shows name + description */}
       {atItems.length > 0 && (
-        <Box flexDirection="column" borderStyle="single" borderColor="cyan" paddingX={1}>
-          <Text dimColor>Suggestions — ↑/↓ move, Space selects, Enter confirms</Text>
-          {atItems.map((item, index) => (
-            <Box key={item.value} gap={1}>
-              <Text color={index === selectedSuggestionIndex ? PAKALON_ACCENT_COLOR : (item.agentColor ?? "cyan")} bold={index === selectedSuggestionIndex}>
-                {index === selectedSuggestionIndex ? "➜" : " "} {item.value}
-              </Text>
-              {item.description ? (
-                <Text color={index === selectedSuggestionIndex ? PAKALON_ACCENT_COLOR : undefined} dimColor={index !== selectedSuggestionIndex}>{item.description.slice(0, 50)}</Text>
-              ) : null}
-            </Box>
-          ))}
+        <Box width="100%" justifyContent="center">
+          <Box flexDirection="column" borderStyle="single" borderColor={PAKALON_ACCENT_COLOR} paddingX={1} width={shellWidth}>
+            <Text dimColor>Suggestions — ↑/↓ move, Space selects, Enter confirms</Text>
+            {atItems.map((item, index) => (
+              <Box key={item.value} gap={1}>
+                <Text color={index === selectedSuggestionIndex ? PAKALON_ACCENT_COLOR : (item.agentColor ?? "cyan")} bold={index === selectedSuggestionIndex}>
+                  {index === selectedSuggestionIndex ? "➜" : " "} {item.value}
+                </Text>
+                {item.description ? (
+                  <Text color={index === selectedSuggestionIndex ? PAKALON_ACCENT_COLOR : undefined} dimColor={index !== selectedSuggestionIndex}>{item.description.slice(0, 50)}</Text>
+                ) : null}
+              </Box>
+            ))}
+          </Box>
         </Box>
       )}
       {slashItems.length > 0 && (
-        <Box flexDirection="column" borderStyle="single" borderColor="gray" paddingX={1}>
-          <Text dimColor>Commands — ↑/↓ move, Space selects, Enter confirms</Text>
-          {slashItems.slice(0, 10).map((item, index) => (
-            <Box key={item.label} gap={1}>
-              <Text color={index === selectedSuggestionIndex ? PAKALON_ACCENT_COLOR : "white"} bold={index === selectedSuggestionIndex}>
-                {index === selectedSuggestionIndex ? "➜" : " "} {item.label}
+        <Box width="100%" justifyContent="center">
+          <Box flexDirection="column" borderStyle="single" borderColor={PAKALON_ACCENT_COLOR} paddingX={1} width={shellWidth}>
+            <Text dimColor>Commands — ↑/↓ move, Space selects, Enter confirms</Text>
+            {slashItems.slice(0, 10).map((item, index) => (
+              <Box key={item.label} gap={1}>
+                <Text color={index === selectedSuggestionIndex ? PAKALON_ACCENT_COLOR : "white"} bold={index === selectedSuggestionIndex}>
+                  {index === selectedSuggestionIndex ? "➜" : " "} {item.label}
+                </Text>
+                <Text color={index === selectedSuggestionIndex ? PAKALON_ACCENT_COLOR : undefined} dimColor={index !== selectedSuggestionIndex}>{item.description}</Text>
+              </Box>
+            ))}
+          </Box>
+        </Box>
+      )}
+      <Box width="100%" justifyContent="center">
+        <Box flexDirection="column" width={shellWidth}>
+          <Text color={PAKALON_GOLD}>{horizontalRule}</Text>
+          <Box paddingX={1}>
+            {isDisabled ? (
+              <Text color={prefixColor}>Generating response...</Text>
+            ) : vimMode && vimEditMode === "normal" ? (
+              // T-CLI-80: Normal mode — custom cursor rendering, TextInput inactive
+              renderVimNormalInput()
+            ) : vimMode && vimEditMode === "visual" ? (
+              // T-CLI-80: Visual mode — selection highlighting
+              renderVimVisualInput()
+            ) : (
+              <TextInput
+                value={value}
+                onChange={setValue}
+                onSubmit={handleSubmit}
+                placeholder="Enter your message here"
+              />
+            )}
+          </Box>
+          {/* T-CLI-57: Ghost text suggestion — shown as dimmed suffix (End accepts) */}
+          {ghostSuggestion && !isDisabled && atItems.length === 0 && (
+            <Box paddingX={1}>
+              <Text color={TEXT_SECONDARY}>
+                {value}
+                <Text color={PAKALON_GOLD}>{ghostSuggestion}</Text>
+                <Text color={TEXT_SECONDARY}>  End accepts</Text>
               </Text>
-              <Text color={index === selectedSuggestionIndex ? PAKALON_ACCENT_COLOR : undefined} dimColor={index !== selectedSuggestionIndex}>{item.description}</Text>
             </Box>
-          ))}
+          )}
+          <Text color={PAKALON_GOLD}>{horizontalRule}</Text>
         </Box>
-      )}
-      <Text color="white">{horizontalRule}</Text>
-      <Box gap={1} paddingX={1}>
-        <Text color={isDisabled ? "gray" : modeColor}>›</Text>
-        {isDisabled ? (
-          <Text dimColor>waiting…</Text>
-        ) : vimMode && vimEditMode === "normal" ? (
-          // T-CLI-80: Normal mode — custom cursor rendering, TextInput inactive
-          renderVimNormalInput()
-        ) : vimMode && vimEditMode === "visual" ? (
-          // T-CLI-80: Visual mode — selection highlighting
-          renderVimVisualInput()
-        ) : (
-          <TextInput
-            value={value}
-            onChange={setValue}
-            onSubmit={handleSubmit}
-            placeholder="message or /help"
-          />
-        )}
       </Box>
-      <Text color="white">{horizontalRule}</Text>
-      {/* T-CLI-57: Ghost text suggestion — shown as dimmed suffix (End accepts) */}
-      {ghostSuggestion && !isDisabled && atItems.length === 0 && (
-        <Box paddingLeft={2}>
-          <Text dimColor color="gray">{value}<Text color="cyan">{ghostSuggestion}</Text>  <Text dimColor>End accepts</Text></Text>
-        </Box>
-      )}
     </Box>
   );
 };

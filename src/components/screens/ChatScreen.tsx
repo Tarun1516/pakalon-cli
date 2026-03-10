@@ -3760,15 +3760,15 @@ After writing the file, summarize the key points here in the chat.`;
     <Box flexDirection="column" height="100%">
       {showBanner && <Banner plan={plan ?? undefined} githubLogin={githubLogin ?? undefined} modelId={selectedModel} />}
       {process.env["PAKALON_TEAMMATE_MODE"] === "1" && (
-        <Box paddingX={1} borderStyle="single" borderColor="cyan">
-          <Text color="cyan" bold>Teammate Mode — </Text>
-          <Text color="cyan">read-only · AI will propose changes but not apply them</Text>
+        <Box paddingX={1} borderStyle="single" borderColor="#ff8c00">
+          <Text color="#ff8c00" bold>Teammate Mode — </Text>
+          <Text color="#ff8c00">read-only · AI will propose changes but not apply them</Text>
         </Box>
       )}
       {process.env["PAKALON_IDE_MODE"] && process.env["PAKALON_IDE_MODE"] !== "none" && (
         <Box paddingX={1}>
           <Text dimColor>IDE: </Text>
-          <Text color="green">{process.env["PAKALON_IDE_MODE"]}</Text>
+          <Text color="#ff8c00">{process.env["PAKALON_IDE_MODE"]}</Text>
         </Box>
       )}
       <Box flexGrow={1} flexDirection="column" overflow="hidden">
@@ -3838,7 +3838,7 @@ After writing the file, summarize the key points here in the chat.`;
           ) : (
             undoManager.getCheckpoints().map((cp, i) => (
               <Text key={cp.checkpointId}>
-                <Text color="cyan">{i + 1}. </Text>
+                <Text color="#ff8c00">{i + 1}. </Text>
                 <Text>{cp.label.slice(0, 60)}</Text>
                 <Text dimColor>  {cp.timestamp instanceof Date ? cp.timestamp.toLocaleTimeString() : new Date(cp.timestamp).toLocaleTimeString()}</Text>
               </Text>
@@ -3854,7 +3854,7 @@ After writing the file, summarize the key points here in the chat.`;
                 const shortPath = d.filePath ? d.filePath.split(/[\\/]/).slice(-2).join("/") : "";
                 return (
                   <Text key={i}>
-                    <Text color={d.severity === "error" ? "red" : d.severity === "warning" ? "yellow" : "blue"}>{sev} </Text>
+                    <Text color={d.severity === "error" ? "red" : d.severity === "warning" ? "yellow" : "#ff8c00"}>{sev} </Text>
                     <Text dimColor>{shortPath}{d.line ? `:${d.line}` : ""} </Text>
                     <Text>{d.message.slice(0, 80)}{d.message.length > 80 ? "…" : ""}</Text>
                   </Text>
@@ -3867,12 +3867,12 @@ After writing the file, summarize the key points here in the chat.`;
       )}
       {/* T-CLI-51: Background tasks sidebar — shown when tasks exist */}
       {backgroundTasks.length > 0 && (
-        <Box borderStyle="single" borderColor="blue" flexDirection="column" paddingX={1}>
-          <Text bold color="blue">Background Tasks (Ctrl+B to spawn · Ctrl+F to stop streaming)</Text>
+        <Box borderStyle="single" borderColor="#ff8c00" flexDirection="column" paddingX={1}>
+          <Text bold color="#ff8c00">Background Tasks (Ctrl+B to spawn · Ctrl+F to stop streaming)</Text>
           {backgroundTasks.slice(-5).map((t) => (
             <Box key={t.id} flexDirection="column">
               <Text>
-                <Text color={t.status === "running" ? "yellow" : t.status === "done" ? "green" : "red"}>{t.status}</Text>
+                <Text color={t.status === "running" ? "yellow" : t.status === "done" ? "#ff8c00" : "red"}>{t.status}</Text>
                 <Text>  </Text>
                 <Text bold>{t.cmd.slice(0, 50)}</Text>
                 {t.exitCode !== undefined && <Text dimColor> (exit {t.exitCode})</Text>}
@@ -3908,10 +3908,10 @@ After writing the file, summarize the key points here in the chat.`;
           ? deduped.filter((c: string) => c.toLowerCase().includes(historySearch.toLowerCase()))
           : deduped;
         return (
-          <Box borderStyle="round" borderColor="cyan" flexDirection="column" paddingX={1}>
-            <Text bold color="cyan">History Search — type to filter, Enter to fill, Esc to close</Text>
+          <Box borderStyle="round" borderColor="#ff8c00" flexDirection="column" paddingX={1}>
+            <Text bold color="#ff8c00">History Search — type to filter, Enter to fill, Esc to close</Text>
             <Box>
-              <Text color="cyan">Search: </Text>
+              <Text color="#ff8c00">Search: </Text>
               <Text>{historySearch || " "}</Text>
             </Box>
             {filtered.slice(0, 8).map((c: string, i: number) => (
@@ -3941,6 +3941,7 @@ After writing the file, summarize the key points here in the chat.`;
           contextLimit={sessionContextLimit}
           privacyMode={privacyMode}
           plan={plan ?? undefined}
+          projectDir={projectDir}
         />
       )}
     </Box>

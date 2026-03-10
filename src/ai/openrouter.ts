@@ -187,36 +187,94 @@ async function streamViaProxy(opts: StreamOptions): Promise<void> {
   let fullText = "";
   let promptTokens = 0;
   let completionTokens = 0;
+  let lineBuffer = "";
+
+  const handleEventPayload = (payload: string): Error | null => {
+    if (!payload || payload === "[DONE]") {
+      return null;
+    }
+
+    try {
+      const event = JSON.parse(payload) as {
+        type?: string;
+        chunk?: string;
+        content?: string;
+        text?: string;
+        detail?: string;
+        error?: { message?: string } | string;
+        prompt_tokens?: number;
+        completion_tokens?: number;
+      };
+
+      const chunk = event.chunk ?? event.content ?? event.text ?? "";
+      if (event.type === "chunk" || event.type === "text_delta" || Boolean(chunk)) {
+        if (chunk) {
+          fullText += chunk;
+          opts.onChunk?.(chunk);
+        }
+        return null;
+      }
+
+      if (event.type === "done" || event.type === "usage") {
+        promptTokens = event.prompt_tokens ?? promptTokens;
+        completionTokens = event.completion_tokens ?? completionTokens;
+        return null;
+      }
+
+      if (event.type === "error" || event.error) {
+        const detail =
+          event.detail ??
+          (typeof event.error === "string"
+            ? event.error
+            : event.error?.message) ??
+          "Stream error";
+        return new Error(detail);
+      }
+    } catch {
+      // Ignore malformed lines and SSE comments from upstream/proxy.
+    }
+
+    return null;
+  };
 
   try {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
 
-      const raw = decoder.decode(value, { stream: true });
-      for (const line of raw.split("\n")) {
-        if (!line.startsWith("data: ")) continue;
-        const payload = line.slice(6).trim();
-        if (payload === "[DONE]") continue;
+      lineBuffer += decoder.decode(value, { stream: true });
 
-        try {
-          const event = JSON.parse(payload) as {
-            type?: string;
-            chunk?: string;
-            text?: string;
-            prompt_tokens?: number;
-            completion_tokens?: number;
-          };
+      let newlineIndex = lineBuffer.indexOf("\n");
+      while (newlineIndex !== -1) {
+        const rawLine = lineBuffer.slice(0, newlineIndex).replace(/\r$/, "");
+        lineBuffer = lineBuffer.slice(newlineIndex + 1);
 
-          if (event.type === "text_delta" || event.chunk) {
-            const chunk = event.chunk ?? event.text ?? "";
-            fullText += chunk;
-            opts.onChunk?.(chunk);
-          } else if (event.type === "usage") {
-            promptTokens = event.prompt_tokens ?? 0;
-            completionTokens = event.completion_tokens ?? 0;
-          }
-        } catch { /* ignore malformed SSE lines */ }
+        if (rawLine.startsWith(":")) {
+          newlineIndex = lineBuffer.indexOf("\n");
+          continue;
+        }
+        if (!rawLine.startsWith("data:")) {
+          newlineIndex = lineBuffer.indexOf("\n");
+          continue;
+        }
+
+        const payload = rawLine.slice(5).trim();
+        const err = handleEventPayload(payload);
+        if (err) {
+          opts.onError?.(err);
+          return;
+        }
+
+        newlineIndex = lineBuffer.indexOf("\n");
+      }
+    }
+
+    const trailing = lineBuffer.trim();
+    if (trailing.startsWith("data:")) {
+      const err = handleEventPayload(trailing.slice(5).trim());
+      if (err) {
+        opts.onError?.(err);
+        return;
       }
     }
   } finally {

@@ -19,6 +19,7 @@ import ChatScreen from "@/components/screens/ChatScreen.js";
 interface ChatLayoutProps {
   initialMessage?: string;
   projectDir?: string;
+  sessionId?: string;
   showBanner?: boolean;
   modelOverride?: string;
   defaultModel?: string;
@@ -40,6 +41,7 @@ interface ChatLayoutProps {
 const ChatLayout: React.FC<ChatLayoutProps> = ({
   initialMessage,
   projectDir,
+  sessionId,
   showBanner = false, // HeaderBar replaces Banner
   modelOverride,
   defaultModel,
@@ -57,7 +59,7 @@ const ChatLayout: React.FC<ChatLayoutProps> = ({
 }) => {
   return (
     <Box flexDirection="column" width="100%">
-      <HeaderBar showLogo />
+      <HeaderBar showLogo sessionId={sessionId} />
       <ContextBar projectDir={projectDir} />
 
       <Box flexGrow={1} flexDirection="column">

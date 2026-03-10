@@ -173,21 +173,21 @@ const SkillsMarketplaceScreen: React.FC<SkillsMarketplaceScreenProps> = ({
   const actionColor = (state: ActionState): string => {
     if (state === "loading") return "yellow";
     if (state === "error") return "red";
-    if (state === "installing" || state === "removing") return "cyan";
-    return "green";
+    if (state === "installing" || state === "removing") return "#ff8c00";
+    return "#ff8c00";
   };
 
   return (
     <Box
       flexDirection="column"
       borderStyle="round"
-      borderColor="cyan"
+      borderColor="#ff8c00"
       paddingX={1}
       paddingY={0}
     >
       {/* Header */}
       <Box flexDirection="row" justifyContent="space-between" marginBottom={0}>
-        <Text bold color="cyan">
+        <Text bold color="#ff8c00">
           {"  Pakalon Skills Marketplace  "}
         </Text>
         <Text dimColor>{"  [Esc/q] close  [/] search  [Enter] install/remove  [u] update  [r] refresh"}</Text>
@@ -225,15 +225,15 @@ const SkillsMarketplaceScreen: React.FC<SkillsMarketplaceScreenProps> = ({
         <Box flexDirection="column">
           {plugins.map((plugin, idx) => {
             const isSel = idx === selectedIndex;
-            const instColor = plugin.installed ? "green" : "gray";
+            const instColor = plugin.installed ? "#ff8c00" : "gray";
             const instLabel = plugin.installed ? "[installed]" : "[available]";
             const selPrefix = isSel ? "> " : "  ";
-            const selColor = isSel ? "cyan" : "white";
+            const selColor = isSel ? "#ff8c00" : "white";
 
             return (
               <Box key={plugin.name} flexDirection="row" paddingY={0}>
                 <Box minWidth={2}>
-                  <Text color={isSel ? "cyan" : "gray"} bold={isSel}>
+                  <Text color={isSel ? "#ff8c00" : "gray"} bold={isSel}>
                     {selPrefix}
                   </Text>
                 </Box>

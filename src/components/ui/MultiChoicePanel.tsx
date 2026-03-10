@@ -50,11 +50,11 @@ export interface MultiChoicePanelProps {
 
 const CURSOR = "▶";
 const CURSOR_EMPTY = " ";
-const BORDER_COLOR = "cyan";
-const SELECTED_COLOR = "cyan";
+const BORDER_COLOR = "#ff8c00";
+const SELECTED_COLOR = "#ff8c00";
 const QUESTION_COLOR = "white";
 const DESC_COLOR = "gray";
-const TITLE_COLOR = "cyan";
+const TITLE_COLOR = "#ff8c00";
 const HINT_COLOR = "gray";
 
 // ---------------------------------------------------------------------------
@@ -150,8 +150,8 @@ const MultiChoicePanel: React.FC<MultiChoicePanelProps> = ({
     const sel = safeChoices[cursor];
     return (
       <Box flexDirection="column" marginY={1}>
-        <Box borderStyle="single" borderColor="green" paddingX={2} paddingY={0}>
-          <Text color="green">✔ </Text>
+        <Box borderStyle="single" borderColor="#ff8c00" paddingX={2} paddingY={0}>
+          <Text color="#ff8c00">✔ </Text>
           <Text color="white">{sel?.label ?? "OK"}</Text>
         </Box>
       </Box>

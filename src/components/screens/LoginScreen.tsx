@@ -77,13 +77,13 @@ export const LoginScreen: React.FC = () => {
   if (state === "waiting" && codeInfo) {
     return (
       <Box flexDirection="column" padding={1} gap={1}>
-        <Text bold color="cyan">
+        <Text bold color="#ff8c00">
           Sign in to Pakalon
         </Text>
         <Text>
           Open this URL in your browser:
         </Text>
-        <Text color="blue" underline>
+        <Text color="#ff8c00" underline>
           {codeInfo.loginUrl}
         </Text>
         <Box marginTop={1}>
@@ -106,7 +106,7 @@ export const LoginScreen: React.FC = () => {
   if (state === "authenticated") {
     return (
       <Box padding={1}>
-        <Text color="green" bold>
+        <Text color="#ff8c00" bold>
           ✓ Authenticated successfully! Starting Pakalon...
         </Text>
       </Box>

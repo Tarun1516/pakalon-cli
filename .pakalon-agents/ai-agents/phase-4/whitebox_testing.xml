@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Pakalon Phase-4 White-Box Testing
+     Tests examine internal structure, code paths, and architecture.
+     Sub-agent 3 (Code Review) populates this during Phase-4 execution. -->
+<whitebox-tests>
+  <!-- <test-suite name="Unit Tests">
+    <test id="WT-001" component="AuthService">...
+  </test-suite> -->
+</whitebox-tests>

@@ -135,9 +135,9 @@ function displayValue(val: unknown, type: FieldType, defaultValue?: unknown): st
 }
 
 // Colors
-const TAB_ACTIVE = "cyan";
+const TAB_ACTIVE = "#ff8c00";
 const TAB_INACTIVE = "gray";
-const FIELD_ACTIVE = "cyan";
+const FIELD_ACTIVE = "#ff8c00";
 const HINT_COLOR = "gray";
 const VALUE_COLOR = "yellow";
 const EDIT_BG = "blue";
@@ -306,7 +306,7 @@ const ConfigScreen: React.FC<ConfigScreenProps> = ({
     <Box flexDirection="column" padding={1}>
       {/* Title */}
       <Box marginBottom={1}>
-        <Text bold color="cyan">
+        <Text bold color="#ff8c00">
           ⚙  Pakalon Settings
         </Text>
         <Text color="gray"> — scope: </Text>
@@ -376,7 +376,7 @@ const ConfigScreen: React.FC<ConfigScreenProps> = ({
       {/* Save feedback */}
       {saved && (
         <Box marginTop={1}>
-          <Text color="green">✔ {savedMsg}</Text>
+          <Text color="#ff8c00">✔ {savedMsg}</Text>
         </Box>
       )}
 

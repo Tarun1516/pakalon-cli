@@ -48,7 +48,7 @@ const FileChangeSummary: React.FC<FileChangeSummaryProps> = ({
       {/* Summary row */}
       <Box flexDirection="row" gap={2}>
         <Text dimColor>changes</Text>
-        <Text color="greenBright" bold>+{sessionLinesAdded}</Text>
+        <Text color="#ff8c00" bold>+{sessionLinesAdded}</Text>
         <Text color="redBright" bold>-{sessionLinesDeleted}</Text>
         <Text dimColor>across {changedFiles.length} file{changedFiles.length !== 1 ? "s" : ""}</Text>
         <Text dimColor>  [press </Text>
@@ -70,7 +70,7 @@ const FileChangeSummary: React.FC<FileChangeSummaryProps> = ({
             return (
               <Box key={f.path} gap={1} flexDirection="row">
                 <Text dimColor>{shortPath.padEnd(40)}</Text>
-                <Text color="greenBright">+{f.linesAdded}</Text>
+                <Text color="#ff8c00">+{f.linesAdded}</Text>
                 <Text color="redBright">-{f.linesDeleted}</Text>
               </Box>
             );

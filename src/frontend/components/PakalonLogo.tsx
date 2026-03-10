@@ -1,6 +1,6 @@
 import React from "react";
-import { Box, Text } from "ink";
-import chalk from "chalk";
+import { Box } from "ink";
+import InkBlack from "../../../assets/text-animation/ink-black.js";
 
 type PakalonLogoVariant = "splash" | "header";
 
@@ -9,53 +9,20 @@ interface PakalonLogoProps {
   align?: "flex-start" | "center" | "flex-end";
 }
 
-const WHITE_FILL = chalk.whiteBright;
-
-const FALLBACK_TEXT: Record<PakalonLogoVariant, string> = {
-  splash: "PAKALON",
-  header: "PAKALON",
-};
-
-const CUSTOM_LOGO_LINES = [
-  "██████╗  █████╗ ██╗  ██╗ █████╗ ██╗      ██████╗ ███╗   ██╗",
-  "██╔══██╗██╔══██╗██║ ██╔╝██╔══██╗██║     ██╔═══██╗████╗  ██║",
-  "██████╔╝███████║█████╔╝ ███████║██║     ██║   ██║██╔██╗ ██║",
-  "██╔═══╝ ██╔══██║██╔═██╗ ██╔══██║██║     ██║   ██║██║╚██╗██║",
-  "██║     ██║  ██║██║  ██╗██║  ██║███████╗╚██████╔╝██║ ╚████║",
-  "╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═╝  ╚═══╝",
-];
-
-function styleCustomLogo(lines: string[]): string[] {
-  return lines.map((line) =>
-    Array.from(line)
-      .map((char) => (char === " " ? char : WHITE_FILL(char)))
-      .join("")
-  );
-}
-
-function getLogoLines(variant: PakalonLogoVariant): string[] {
-  const terminalWidth = process.stdout.columns ?? 120;
-  const widestLine = Math.max(...CUSTOM_LOGO_LINES.map((line) => line.length), 0);
-  const minimumPadding = variant === "header" ? 10 : 4;
-
-  if (widestLine + minimumPadding <= terminalWidth) {
-    return styleCustomLogo(CUSTOM_LOGO_LINES);
-  }
-
-  return [WHITE_FILL(FALLBACK_TEXT[variant])];
+export function getPakalonLogoWidth(
+  variant: PakalonLogoVariant,
+  terminalWidth = process.stdout.columns ?? 120
+): number {
+  return 63; // Correct width of the ink-black animation asset
 }
 
 const PakalonLogo: React.FC<PakalonLogoProps> = ({
   variant = "splash",
   align = "center",
 }) => {
-  const lines = getLogoLines(variant);
-
   return (
-    <Box flexDirection="column" alignItems={align}>
-      {lines.map((line, index) => (
-        <Text key={`${variant}-${index}`}>{line}</Text>
-      ))}
+    <Box flexDirection="column" alignItems={align} flexShrink={0}>
+      <InkBlack loop={true} autoPlay={true} />
     </Box>
   );
 };

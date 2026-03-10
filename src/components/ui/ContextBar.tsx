@@ -1,10 +1,15 @@
 /**
  * ContextBar — prominent context-window progress bar shown under the header.
+ *
+ * Design: Golden separator line with progress indicator blocks
+ * ───────────────────────────────────────────────────────────────
+ * context window [████████░░░░░░░░] 45% used • 128k left
  */
 import React from "react";
 import { Box, Text } from "ink";
-import * as path from "path";
 import { useModel, useSession } from "@/store/index.js";
+import { PAKALON_GOLD, TEXT_SECONDARY, STATUS_WARNING, STATUS_ERROR } from "@/constants/colors.js";
+import { getShellWidth } from "@/utils/shell-layout.js";
 
 interface ContextBarProps {
   projectDir?: string;
@@ -21,11 +26,9 @@ interface ContextBarProps {
   creditsTotal?: number;
 }
 
-/** Build a compact ASCII progress bar of fixed width */
-function buildBar(pct: number, width = 12): string {
-  const filled = Math.round((pct / 100) * width);
-  const empty = width - filled;
-  return "█".repeat(Math.max(0, filled)) + "░".repeat(Math.max(0, empty));
+/** Decorative segmented bar matching the mockup. */
+function buildBar(width = 8): string {
+  return "▮".repeat(width);
 }
 
 /** Format a token count to a compact string: 1234 → "1.2k", 100000 → "100k" */
@@ -36,18 +39,15 @@ function fmtTokens(n: number): string {
 }
 
 const ContextBar: React.FC<ContextBarProps> = ({
-  projectDir,
-  activeFile,
   tokenCount,
   contextLimit,
   remainingPct,
   isStreaming = false,
-  creditsRemaining,
-  creditsTotal,
 }) => {
   const { selectedModel, availableModels } = useModel();
   const { remainingPct: sessionRemainingPct } = useSession();
-  const dir = projectDir ? path.basename(projectDir) : process.cwd().split(path.sep).pop() ?? "~";
+  const terminalWidth = process.stdout.columns ?? 120;
+  const shellWidth = getShellWidth(terminalWidth);
   const modelContextLimit = availableModels.find((model) => model.id === selectedModel)?.contextLength;
   const effectiveRemainingPct = remainingPct ?? sessionRemainingPct ?? undefined;
   const effectiveContextLimit = contextLimit ?? modelContextLimit;
@@ -60,37 +60,28 @@ const ContextBar: React.FC<ContextBarProps> = ({
         ? Math.min(100, Math.round((tokenCount / effectiveContextLimit) * 100))
         : 0;
 
+  // Bar color based on usage - golden at low, warning at medium, error at high
   const barColor =
-    usedPct >= 80 ? "red" : usedPct >= 60 ? "yellow" : "green";
+    usedPct >= 80 ? STATUS_ERROR : usedPct >= 60 ? STATUS_WARNING : PAKALON_GOLD;
 
-  const bar = buildBar(usedPct, 26);
+  const bar = buildBar(terminalWidth < 60 ? 8 : 10);
+  const displayTokenCount = tokenCount ?? 0;
 
-  // Token counts label: "83.2k / 128k"
-  const tokenLabel =
-    tokenCount && effectiveContextLimit
-      ? `${fmtTokens(tokenCount)} / ${fmtTokens(effectiveContextLimit)}`
-      : tokenCount
-        ? `${fmtTokens(tokenCount)} tokens`
-        : null;
-
-  // Remaining label: "47.8k left" (or from API's remainingPct)
-  const remaining =
-    effectiveRemainingPct !== undefined
-      ? `${Math.round(effectiveRemainingPct)}% left`
-      : tokenCount && effectiveContextLimit
-        ? `${fmtTokens(Math.max(0, effectiveContextLimit - tokenCount))} left`
-        : null;
+  const tokenLabel = effectiveContextLimit
+    ? `${fmtTokens(displayTokenCount)}/${fmtTokens(effectiveContextLimit)}`
+    : `${fmtTokens(displayTokenCount)}/?`;
 
   return (
-    <Box gap={2} paddingX={1} marginTop={0} marginBottom={0}>
-      <Text color="whiteBright" bold>context window</Text>
-      <Text color="white">{bar}</Text>
-      <Text color={barColor} bold={usedPct >= 80}>{usedPct}% used</Text>
-      {remaining && <Text dimColor>{remaining}</Text>}
-      {tokenLabel && <Text dimColor>{tokenLabel}</Text>}
-      <Text dimColor>{dir}</Text>
-      {activeFile && <Text dimColor>{path.basename(activeFile)}</Text>}
-      {isStreaming && <Text color="cyan">live</Text>}
+    <Box width="100%" justifyContent="center" marginBottom={1}>
+      <Box width={shellWidth} gap={1} flexWrap="wrap" paddingX={1}>
+        <Text color={PAKALON_GOLD}>Context window</Text>
+        <Text color={PAKALON_GOLD}>{bar}</Text>
+        <Text color={barColor} bold>{usedPct}%</Text>
+        <Text color={TEXT_SECONDARY}>
+          <Text color={PAKALON_GOLD}>{tokenLabel}</Text> token used
+        </Text>
+        {isStreaming && <Text color={PAKALON_GOLD}>live</Text>}
+      </Box>
     </Box>
   );
 };

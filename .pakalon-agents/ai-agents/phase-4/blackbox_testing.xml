@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Pakalon Phase-4 Black-Box Testing
+     Tests validate the application from the user's perspective (user stories).
+     Sub-agent 1 (SAST) populates this during Phase-4 execution. -->
+<blackbox-tests>
+  <!-- <test-suite name="Authentication">
+    <test id="BT-001" user-story="US-001">...
+  </test-suite> -->
+</blackbox-tests>

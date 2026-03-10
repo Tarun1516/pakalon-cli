@@ -12,7 +12,7 @@ import AgentScreen from "@/components/screens/AgentScreen.js";
 import { useAuth, useMode, useStore } from "@/store/index.js";
 import { loadCredentials } from "@/auth/storage.js";
 import { getApiClient } from "@/api/client.js";
-import { cmdResumeSession, cmdForkSession, cmdReplayUserMessages, cmdContinue, cmdCreateSession } from "@/commands/session.js";
+import { cmdResumeSession, cmdForkSession, cmdReplayUserMessages, cmdContinue, cmdCreateSession, cmdListSessions } from "@/commands/session.js";
 import { resolveProjectConfig } from "@/utils/project-config.js";
 import logger from "@/utils/logger.js";
 import { checkStartupCredits } from "@/api/credits.js";
@@ -98,6 +98,7 @@ const App: React.FC<AppProps> = ({
   const sessionId = useStore((s) => s.sessionId);
   const pendingBridgeMode = useStore((s) => s.pendingBridgeMode);
   const [isCreatingStartupSession, setIsCreatingStartupSession] = React.useState(false);
+  const [resolvedSessionId, setResolvedSessionId] = React.useState<string | null>(sessionId);
 
   // Was the user already logged in when the app started? (returning user → show text animation)
   const [wasAlreadyLoggedIn] = React.useState(isLoggedIn);
@@ -286,6 +287,12 @@ const App: React.FC<AppProps> = ({
   }, [continueSession, isLoggedIn, sessionIdOverride]);
 
   useEffect(() => {
+    if (sessionId) {
+      setResolvedSessionId(sessionId);
+    }
+  }, [sessionId]);
+
+  useEffect(() => {
     if (!isLoggedIn || sessionId || sessionIdOverride || continueSession || forkSession) {
       return;
     }
@@ -293,6 +300,12 @@ const App: React.FC<AppProps> = ({
     let cancelled = false;
     setIsCreatingStartupSession(true);
     void cmdCreateSession(undefined, "chat", projectDir)
+      .then((session) => {
+        if (!cancelled) {
+          setResolvedSessionId(session.id);
+          useStore.getState().setSessionId(session.id);
+        }
+      })
       .catch((err) => {
         if (!cancelled) {
           logger.warn("Failed to create startup session", err);
@@ -308,6 +321,51 @@ const App: React.FC<AppProps> = ({
       cancelled = true;
     };
   }, [continueSession, forkSession, isLoggedIn, projectDir, sessionId, sessionIdOverride]);
+
+  useEffect(() => {
+    if (
+      !isLoggedIn ||
+      sessionId ||
+      resolvedSessionId ||
+      sessionIdOverride ||
+      continueSession ||
+      forkSession ||
+      isCreatingStartupSession
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void cmdListSessions(1, projectDir)
+      .then((sessions) => {
+        const latestSessionId = sessions[0]?.id;
+        if (!latestSessionId || cancelled) {
+          return;
+        }
+
+        setResolvedSessionId(latestSessionId);
+        useStore.getState().setSessionId(latestSessionId);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          logger.warn("Failed to recover latest session id", err);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    continueSession,
+    forkSession,
+    isCreatingStartupSession,
+    isLoggedIn,
+    projectDir,
+    resolvedSessionId,
+    sessionId,
+    sessionIdOverride,
+  ]);
 
   // --file flag: read each specified file and store contents
   useEffect(() => {
@@ -530,7 +588,9 @@ const App: React.FC<AppProps> = ({
     );
   }
 
-  if (isCreatingStartupSession && !sessionId) {
+  const activeSessionId = resolvedSessionId ?? sessionId;
+
+  if (isCreatingStartupSession && !activeSessionId) {
     return (
       <Box flexDirection="column" padding={1}>
         <Text color="yellowBright">Preparing your session…</Text>
@@ -540,10 +600,11 @@ const App: React.FC<AppProps> = ({
   }
 
   return (
-    <ChatLayout
-      initialMessage={resolvedInitialMessage}
-      projectDir={projectDir}
-      showBanner={false}
+      <ChatLayout
+        initialMessage={resolvedInitialMessage}
+        projectDir={projectDir}
+        sessionId={activeSessionId ?? undefined}
+        showBanner={false}
       modelOverride={modelOverride}
       defaultModel={defaultModel}
       fallbackModel={fallbackModel}

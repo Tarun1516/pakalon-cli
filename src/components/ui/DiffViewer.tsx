@@ -75,7 +75,7 @@ export function parseDiff(rawDiff: string): DiffFile[] {
 const DiffLineView: React.FC<{ line: DiffLine; showLineNumbers: boolean }> = ({ line, showLineNumbers }) => {
   if (line.type === "file-header") {
     return (
-      <Text bold color="cyan">
+      <Text bold color="#ff8c00">
         {line.content}
       </Text>
     );
@@ -83,14 +83,14 @@ const DiffLineView: React.FC<{ line: DiffLine; showLineNumbers: boolean }> = ({ 
 
   if (line.type === "hunk-header") {
     return (
-      <Text color="cyan" dimColor>
+      <Text color="#ff8c00" dimColor>
         {line.content}
       </Text>
     );
   }
 
   const prefix = line.type === "added" ? "+" : line.type === "removed" ? "-" : " ";
-  const color = line.type === "added" ? "green" : line.type === "removed" ? "red" : undefined;
+  const color = line.type === "added" ? "#ff8c00" : line.type === "removed" ? "red" : undefined;
   const lineNumStr = showLineNumbers && line.lineNumber !== undefined ? String(line.lineNumber).padStart(4) + " " : "     ";
 
   return (
@@ -185,7 +185,7 @@ const DiffViewer: React.FC<DiffViewerProps> = ({
         <Text dimColor>
           {files.length} file(s) changed · {" "}
         </Text>
-        <Text color="green">+{totalAdditions}</Text>
+        <Text color="#ff8c00">+{totalAdditions}</Text>
         <Text> </Text>
         <Text color="red">-{totalDeletions}</Text>
       </Box>

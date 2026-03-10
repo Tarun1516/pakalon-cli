@@ -8,7 +8,7 @@ import { getApiClient } from "@/api/client.js";
 import { useStore } from "@/store/index.js";
 import { debugLog } from "@/utils/logger.js";
 
-const PAKALON_ACCENT_COLOR = "#f59e0b";
+const PAKALON_ACCENT_COLOR = "#ff8c00"; // vibrant orange
 
 interface ModelItem {
   id?: string;
@@ -44,7 +44,7 @@ function tierBadge(tier: string): string {
 }
 
 function tierColor(tier: string): string {
-  return tier === "free" ? "green" : "yellow";
+  return tier === "free" ? "#ff8c00" : "yellow";
 }
 
 function remainingBar(pct: number): string {
@@ -62,7 +62,7 @@ interface ModelRowProps {
 const ModelRow: React.FC<ModelRowProps> = ({ model, isSelected, index }) => {
   const prefix = isSelected ? "➜ " : "  ";
   const pct = model.remaining_pct ?? 100;
-  const barColor = pct < 15 ? "red" : pct < 40 ? "yellow" : "green";
+  const barColor = pct < 15 ? "red" : pct < 40 ? "yellow" : "#ff8c00";
 
   return (
     <Box flexDirection="row">
@@ -218,7 +218,7 @@ const ModelsScreen: React.FC<ModelsScreenProps> = ({ onSelect, onBack }) => {
   if (loading) {
     return (
       <Box flexDirection="column">
-        <Text color="cyan">⟳ Loading models...</Text>
+        <Text color="#ff8c00">⟳ Loading models...</Text>
       </Box>
     );
   }
@@ -235,7 +235,7 @@ const ModelsScreen: React.FC<ModelsScreenProps> = ({ onSelect, onBack }) => {
   if (confirmed && statusMsg) {
     return (
       <Box flexDirection="column" paddingY={1}>
-        <Text color="green" bold>{statusMsg}</Text>
+        <Text color="#ff8c00" bold>{statusMsg}</Text>
       </Box>
     );
   }
@@ -246,11 +246,11 @@ const ModelsScreen: React.FC<ModelsScreenProps> = ({ onSelect, onBack }) => {
       <Box
         flexDirection="row"
         borderStyle="round"
-        borderColor="cyan"
+        borderColor="#ff8c00"
         paddingX={1}
         marginBottom={0}
       >
-        <Text bold color="cyan">
+        <Text bold color="#ff8c00">
           MODELS
         </Text>
         <Text dimColor>  {filtered.length} available</Text>

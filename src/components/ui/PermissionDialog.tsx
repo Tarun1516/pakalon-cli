@@ -15,7 +15,7 @@ interface PermissionDialogProps {
 }
 
 const RISK_COLORS: Record<RiskLevel, string> = {
-  low: "green",
+  low: "#ff8c00",
   medium: "yellow",
   high: "red",
   critical: "magenta",
@@ -71,7 +71,7 @@ const PermissionDialog = ({ onDismiss }: PermissionDialogProps) => {
         {/* Tool */}
         <Box gap={1}>
           <Text bold>Tool:</Text>
-          <Text color="cyan">{request.tool}</Text>
+          <Text color="#ff8c00">{request.tool}</Text>
           {request.agentId && <Text dimColor> (agent: {request.agentId})</Text>}
         </Box>
 

@@ -13,6 +13,8 @@ import fs from "fs";
 import path from "path";
 import { useFileChanges, useStore } from "@/store/index.js";
 import type { InteractionMode, PermissionMode } from "@/store/slices/mode.slice.js";
+import { PAKALON_GOLD, STATUS_ERROR, STATUS_SUCCESS, TEXT_PRIMARY, TEXT_SECONDARY } from "@/constants/colors.js";
+import { getShellWidth } from "@/utils/shell-layout.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -118,13 +120,6 @@ async function runStatusLineCommand(command: string, cwd?: string): Promise<stri
   }
 }
 
-const CI_STATUS_COLOR: Record<NonNullable<CiStatus>, string> = {
-  pending: "yellow",
-  success: "green",
-  failure: "red",
-  cancelled: "gray",
-};
-
 const CI_STATUS_LABEL: Record<NonNullable<CiStatus>, string> = {
   pending: "pending",
   success: "ok",
@@ -152,8 +147,8 @@ interface StatusLineProps {
 }
 
 const PERMISSION_MODE_COLORS: Record<PermissionMode, string> = {
-  plan: "blue",
-  "auto-accept": "green",
+  plan: PAKALON_GOLD,
+  "auto-accept": PAKALON_GOLD,
   orchestration: "yellow",
   normal: "white",
 };
@@ -165,17 +160,19 @@ const PERMISSION_MODE_LABELS: Record<PermissionMode, string | null> = {
   normal: "Normal",
 };
 
+function formatFilesMetric(count: number): string {
+  return `<${count} file${count === 1 ? "" : "s"} edited>`;
+}
+
+function formatEditMetric(count: number, verb: "written" | "deleted"): string {
+  return `<${count} line${count === 1 ? "" : "s"} of code ${verb}>`;
+}
+
 const StatusLine: React.FC<StatusLineProps> = ({
-  modelId,
-  plan,
   mode = "chat",
   trialDaysRemaining,
   isStreaming,
-  messageCount = 0,
-  estimatedTokens,
-  contextLimit,
   privacyMode,
-  defaultModel,
   projectDir,
 }) => {
   const permissionMode = useStore((s) => s.permissionMode);
@@ -209,31 +206,54 @@ const StatusLine: React.FC<StatusLineProps> = ({
   }, [projectDir]);
 
   const visibleModeLabel = PERMISSION_MODE_LABELS[permissionMode];
+  const shellWidth = getShellWidth(process.stdout.columns ?? 80);
+  const compactLayout = shellWidth < 68;
+  const extras = [
+    scriptOutput || null,
+    gitInfo.ciStatus ? `ci:${CI_STATUS_LABEL[gitInfo.ciStatus]}` : null,
+    isStreaming ? "live" : null,
+    privacyMode ? "private" : null,
+    trialDaysRemaining !== null && trialDaysRemaining !== undefined && trialDaysRemaining <= 5
+      ? `${trialDaysRemaining}d trial`
+      : null,
+    mode !== "chat" ? mode : null,
+  ].filter(Boolean) as string[];
+  const modeLabel = (visibleModeLabel ?? permissionMode).toLowerCase();
 
   return (
-    <Box paddingX={1} gap={2} marginTop={0} flexWrap="wrap">
-      {visibleModeLabel && (
-        <Text color={PERMISSION_MODE_COLORS[permissionMode]} bold>
-          {visibleModeLabel}
-        </Text>
-      )}
-      {messageCount > 0 && <Text dimColor>session {messageCount} msg{messageCount !== 1 ? "s" : ""}</Text>}
-      {(sessionLinesAdded > 0 || sessionLinesDeleted > 0) && (
-        <>
-          <Text dimColor>changes</Text>
-          <Text color="greenBright">+{sessionLinesAdded}</Text>
-          <Text color="redBright">-{sessionLinesDeleted}</Text>
-          <Text dimColor>{changedFiles.length} file{changedFiles.length !== 1 ? "s" : ""}</Text>
-        </>
-      )}
-      {scriptOutput && <Text dimColor>{scriptOutput}</Text>}
-      {gitInfo.ciStatus && <Text dimColor>ci:{CI_STATUS_LABEL[gitInfo.ciStatus]}</Text>}
-      {isStreaming && <Text color="cyan">live</Text>}
-      {privacyMode && <Text dimColor>private</Text>}
-      {trialDaysRemaining !== null && trialDaysRemaining !== undefined && trialDaysRemaining <= 5 && (
-        <Text color={trialDaysRemaining <= 2 ? "red" : "yellow"}>{trialDaysRemaining}d trial</Text>
-      )}
-      {mode !== "chat" && <Text dimColor>{mode}</Text>}
+    <Box width="100%" justifyContent="center">
+      <Box flexDirection="column" width={shellWidth} paddingX={1}>
+        <Box gap={compactLayout ? 2 : 4} flexWrap="wrap">
+          <Box minWidth={10}>
+            <Text color={PERMISSION_MODE_COLORS[permissionMode]} bold>
+              {modeLabel}
+            </Text>
+          </Box>
+          <Box minWidth={18}>
+            <Text color={TEXT_PRIMARY}>Files changed</Text>
+          </Box>
+          <Box minWidth={28}>
+            <Text color={TEXT_PRIMARY}>Edits</Text>
+          </Box>
+        </Box>
+
+        <Box gap={compactLayout ? 2 : 4} flexWrap="wrap">
+          <Box minWidth={10} />
+          <Box minWidth={18}>
+            <Text color={PAKALON_GOLD}>{formatFilesMetric(changedFiles.length)}</Text>
+          </Box>
+          <Box flexDirection="column" minWidth={28}>
+            <Text color={STATUS_SUCCESS}>{formatEditMetric(sessionLinesAdded, "written")}</Text>
+            <Text color={STATUS_ERROR}>{formatEditMetric(sessionLinesDeleted, "deleted")}</Text>
+          </Box>
+        </Box>
+
+        {extras.length > 0 && (
+          <Box marginTop={1}>
+            <Text color={TEXT_SECONDARY}>{extras.join(" • ")}</Text>
+          </Box>
+        )}
+      </Box>
     </Box>
   );
 };

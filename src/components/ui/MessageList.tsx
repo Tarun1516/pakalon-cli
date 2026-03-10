@@ -5,8 +5,10 @@
 import React, { useState, useEffect } from "react";
 import { Box, Text } from "ink";
 import type { ChatMessage } from "@/store/slices/session.slice.js";
+import { PAKALON_GOLD, TEXT_PRIMARY } from "@/constants/colors.js";
+import { getShellWidth } from "@/utils/shell-layout.js";
 
-const PAKALON_ASSISTANT_COLOR = "#f59e0b";
+const PAKALON_ASSISTANT_COLOR = PAKALON_GOLD;
 
 // T-CLI-11: Extract image file paths from message text
 const IMAGE_PATH_RE = /(?:^|\s)((?:\.{0,2}\/|[A-Za-z]:[/\\]|\/)[^\s"'<>]+\.(?:png|jpg|jpeg|gif|webp|bmp|svg))(?:\s|$)/gi;
@@ -87,7 +89,7 @@ const MessageItem: React.FC<{ msg: ChatMessage }> = ({ msg }) => {
       <Box gap={1}>
         <Text
           bold
-          color={isUser ? "blue" : PAKALON_ASSISTANT_COLOR}
+          color={isUser ? TEXT_PRIMARY : PAKALON_ASSISTANT_COLOR}
         >
           {isUser ? "you" : "pakalon"}
         </Text>
@@ -97,7 +99,7 @@ const MessageItem: React.FC<{ msg: ChatMessage }> = ({ msg }) => {
             minute: "2-digit",
           })}
         </Text>
-        {msg.isStreaming && <Text color="cyan">●</Text>}
+        {msg.isStreaming && <Text color={PAKALON_ASSISTANT_COLOR}>●</Text>}
       </Box>
       <Box paddingLeft={2} flexDirection="column">
         <Text wrap="wrap">{msg.content}</Text>
@@ -112,25 +114,28 @@ const MessageItem: React.FC<{ msg: ChatMessage }> = ({ msg }) => {
 
 const MessageList: React.FC<MessageListProps> = ({ messages, maxVisible = 20 }) => {
   const visible = messages.slice(-maxVisible);
+  const shellWidth = getShellWidth(process.stdout.columns ?? 80);
 
   if (visible.length === 0) {
     return (
-      <Box paddingX={1}>
-        <Text dimColor>Start a conversation — type a message below.</Text>
+      <Box width="100%" justifyContent="center" flexGrow={1}>
+        <Box flexGrow={1} width={shellWidth} />
       </Box>
     );
   }
 
   return (
-    <Box flexDirection="column" flexGrow={1}>
-      {messages.length > maxVisible && (
-        <Text dimColor>
-          ↑ {messages.length - maxVisible} earlier messages hidden
-        </Text>
-      )}
-      {visible.map((msg) => (
-        <MessageItem key={msg.id} msg={msg} />
-      ))}
+    <Box width="100%" justifyContent="center" flexGrow={1}>
+      <Box flexDirection="column" flexGrow={1} width={shellWidth}>
+        {messages.length > maxVisible && (
+          <Text dimColor>
+            ↑ {messages.length - maxVisible} earlier messages hidden
+          </Text>
+        )}
+        {visible.map((msg) => (
+          <MessageItem key={msg.id} msg={msg} />
+        ))}
+      </Box>
     </Box>
   );
 };

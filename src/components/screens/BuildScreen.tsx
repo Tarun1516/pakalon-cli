@@ -315,7 +315,7 @@ const BuildScreen: React.FC<BuildScreenProps> = ({
       {isRunning && !interactiveReq && (
         <Box gap={1} paddingX={1}>
           <Spinner />
-          <Text color="cyan">{currentStep}</Text>
+          <Text color="#ff8c00">{currentStep}</Text>
         </Box>
       )}
 
@@ -330,8 +330,8 @@ const BuildScreen: React.FC<BuildScreenProps> = ({
 
       {/* Interactive prompt: choice_request (Q&A, T-CLI-03) */}
       {interactiveReq && interactiveReq.type === "choice_request" && (
-        <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={2} paddingY={1}>
-          <Text bold color="cyan">
+        <Box flexDirection="column" borderStyle="round" borderColor="#ff8c00" paddingX={2} paddingY={1}>
+          <Text bold color="#ff8c00">
             Question {interactiveReq.question_index + 1}/{interactiveReq.total_questions}
           </Text>
           <Text bold>{interactiveReq.question}</Text>
@@ -358,7 +358,7 @@ const BuildScreen: React.FC<BuildScreenProps> = ({
       {/* Completion / error state */}
       {isDone && !error && (
         <Box paddingX={1}>
-          <Text bold color="green">
+          <Text bold color="#ff8c00">
             ✅ Phase {phase} completed successfully. Press Esc or Ctrl-C to exit.
           </Text>
         </Box>

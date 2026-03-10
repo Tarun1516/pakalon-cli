@@ -3,6 +3,7 @@
  */
 import React, { useEffect, useState } from "react";
 import { Text } from "ink";
+import { PAKALON_GOLD } from "@/constants/colors.js";
 
 const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const INTERVAL_MS = 80;
@@ -25,7 +26,7 @@ const Spinner: React.FC<SpinnerProps> = ({ label }) => {
 
   return (
     <Text>
-      <Text color="cyan">{currentFrame} </Text>
+      <Text color={PAKALON_GOLD}>{currentFrame} </Text>
       {label && <Text>{label}</Text>}
     </Text>
   );

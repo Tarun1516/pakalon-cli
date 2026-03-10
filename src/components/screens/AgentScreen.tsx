@@ -436,7 +436,7 @@ const AgentScreen: React.FC<AgentScreenProps> = ({ initialTask, projectDir, brid
         {projectDir && <Text dimColor>{projectDir}</Text>}
         {/* Phase progress indicator */}
         {currentPhase !== null && (
-          <Text color="cyan">
+          <Text color="#ff8c00">
             Phase {currentPhase}/6
           </Text>
         )}
@@ -446,7 +446,7 @@ const AgentScreen: React.FC<AgentScreenProps> = ({ initialTask, projectDir, brid
       {agentCurrentStep && (
         <Box gap={1} paddingX={1}>
           <Spinner />
-          <Text color="cyan">{agentCurrentStep}</Text>
+          <Text color="#ff8c00">{agentCurrentStep}</Text>
         </Box>
       )}
 
@@ -484,11 +484,11 @@ const AgentScreen: React.FC<AgentScreenProps> = ({ initialTask, projectDir, brid
         <Box
           flexDirection="column"
           borderStyle="round"
-          borderColor="cyan"
+          borderColor="#ff8c00"
           paddingX={1}
           marginX={1}
         >
-          <Text bold color="cyan">✍️  {awaitingFreeText}</Text>
+          <Text bold color="#ff8c00">✍️  {awaitingFreeText}</Text>
           <InputBar onSubmit={handleFreeTextSubmit} isDisabled={false} />
         </Box>
       )}
