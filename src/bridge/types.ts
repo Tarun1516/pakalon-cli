@@ -2,6 +2,8 @@
  * Python bridge types — shared between manager and client.
  */
 
+import type { PenpotProjectState } from "@/utils/penpot-state.js";
+
 export interface BridgeRequest {
   id: string;
   type: "agent_run" | "memory_search" | "context_build" | "ping";
@@ -133,6 +135,13 @@ export interface PipelineStartRequest {
   is_yolo: boolean;
   figma_url?: string;
   target_url?: string;
+}
+
+export interface PenpotProjectStateResponse {
+  status: string;
+  message?: string;
+  has_design: boolean;
+  project_state: PenpotProjectState | Record<string, unknown> | null;
 }
 
 /** Phase/subagent status for display */

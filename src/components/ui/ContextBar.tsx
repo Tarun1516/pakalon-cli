@@ -8,6 +8,7 @@
 import React from "react";
 import { Box, Text } from "ink";
 import { useModel, useSession } from "@/store/index.js";
+import { estimateMessagesTokens } from "@/ai/context.js";
 import { PAKALON_GOLD, TEXT_SECONDARY, STATUS_WARNING, STATUS_ERROR } from "@/constants/colors.js";
 import { getShellWidth } from "@/utils/shell-layout.js";
 
@@ -26,9 +27,12 @@ interface ContextBarProps {
   creditsTotal?: number;
 }
 
-/** Decorative segmented bar matching the mockup. */
-function buildBar(width = 8): string {
-  return "▮".repeat(width);
+/** Real ASCII progress bar for context usage. */
+function buildBar(usedPct: number, width = 20): string {
+  const clamped = Math.max(0, Math.min(100, usedPct));
+  const filled = Math.round((clamped / 100) * width);
+  const empty = Math.max(0, width - filled);
+  return `[${"#".repeat(filled)}${"-".repeat(empty)}]`;
 }
 
 /** Format a token count to a compact string: 1234 → "1.2k", 100000 → "100k" */
@@ -45,27 +49,36 @@ const ContextBar: React.FC<ContextBarProps> = ({
   isStreaming = false,
 }) => {
   const { selectedModel, availableModels } = useModel();
-  const { remainingPct: sessionRemainingPct } = useSession();
+  const { remainingPct: sessionRemainingPct, messages } = useSession();
   const terminalWidth = process.stdout.columns ?? 120;
   const shellWidth = getShellWidth(terminalWidth);
   const modelContextLimit = availableModels.find((model) => model.id === selectedModel)?.contextLength;
   const effectiveRemainingPct = remainingPct ?? sessionRemainingPct ?? undefined;
   const effectiveContextLimit = contextLimit ?? modelContextLimit;
+  const estimatedTokenCount = tokenCount ?? estimateMessagesTokens(
+    messages
+      .filter((message) => !message.isStreaming)
+      .map((message) => ({
+        role: (message.role === "tool" ? "assistant" : message.role) as "user" | "assistant" | "system",
+        content: message.content,
+      }))
+  );
 
   // Compute used% — API remaining_pct takes precedence over local estimate
   const usedPct: number =
     effectiveRemainingPct !== undefined
       ? Math.max(0, Math.min(100, 100 - effectiveRemainingPct))
-      : tokenCount && effectiveContextLimit
-        ? Math.min(100, Math.round((tokenCount / effectiveContextLimit) * 100))
+      : estimatedTokenCount && effectiveContextLimit
+        ? Math.min(100, Math.round((estimatedTokenCount / effectiveContextLimit) * 100))
         : 0;
 
   // Bar color based on usage - golden at low, warning at medium, error at high
   const barColor =
     usedPct >= 80 ? STATUS_ERROR : usedPct >= 60 ? STATUS_WARNING : PAKALON_GOLD;
 
-  const bar = buildBar(terminalWidth < 60 ? 8 : 10);
-  const displayTokenCount = tokenCount ?? 0;
+  const bar = buildBar(usedPct, terminalWidth < 60 ? 16 : terminalWidth < 90 ? 22 : 28);
+  const displayTokenCount = estimatedTokenCount ?? 0;
+  const remainingTokens = effectiveContextLimit ? Math.max(0, effectiveContextLimit - displayTokenCount) : null;
 
   const tokenLabel = effectiveContextLimit
     ? `${fmtTokens(displayTokenCount)}/${fmtTokens(effectiveContextLimit)}`
@@ -78,8 +91,9 @@ const ContextBar: React.FC<ContextBarProps> = ({
         <Text color={PAKALON_GOLD}>{bar}</Text>
         <Text color={barColor} bold>{usedPct}%</Text>
         <Text color={TEXT_SECONDARY}>
-          <Text color={PAKALON_GOLD}>{tokenLabel}</Text> token used
+          <Text color={PAKALON_GOLD}>{tokenLabel}</Text> used
         </Text>
+        {remainingTokens !== null && <Text color={TEXT_SECONDARY}>{fmtTokens(remainingTokens)} left</Text>}
         {isStreaming && <Text color={PAKALON_GOLD}>live</Text>}
       </Box>
     </Box>

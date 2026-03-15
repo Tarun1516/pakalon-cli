@@ -102,7 +102,9 @@ vi.mock("@/db/client.js", () => ({
   db: {
     select: vi.fn(() => ({
       from: vi.fn(() => ({
-        where: vi.fn(() => Promise.resolve([])),
+        where: vi.fn(() => ({
+          limit: vi.fn(() => Promise.resolve([])),
+        })),
         orderBy: vi.fn(() => Promise.resolve([])),
         limit: vi.fn(() => Promise.resolve([])),
       })),

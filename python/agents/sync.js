@@ -23,7 +23,7 @@
  *
  * COMMANDS
  *   node sync.js --start     Start Penpot, open browser, begin sync loop
- *   node sync.js --stop      Stop sync loop + stop Penpot container
+ *   node sync.js --stop      Stop sync loop + stop the Penpot stack
  *   node sync.js --watch     Watch only (assumes Penpot already running)
  *   node sync.js --lifecycle Auto-watch Penpot container lifecycle
  *
@@ -42,14 +42,22 @@
  *   PAKALON_AGENTS_DIR    Root output dir    (default: .pakalon-agents)
  */
 
-import { execSync } from 'child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'fs';
-import { join, dirname } from 'path';
+import { execFileSync, execSync } from 'child_process';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import http from 'http';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+const PENPOT_COMPOSE_FILE = join(__dirname, '..', 'penpot-compose.yml');
+const PENPOT_FRONTEND_CONTAINER_NAME = 'pakalon-penpot-frontend';
+const PENPOT_READY_TIMEOUT_MS = 120000;
+
+function runDockerCommand(args, options = {}) {
+  return execFileSync('docker', args, options);
+}
 
 // ─── Configuration (overridden by CLI args) ───────────────────────────────────
 const PENPOT_HOST       = process.env.PENPOT_HOST       || 'http://localhost:3449';
@@ -72,6 +80,106 @@ let projectId  = null;
 let fileId     = null;
 let outputDir  = DEFAULT_OUTPUT_DIR;
 let openBrowser = true;
+
+function readJson(filePath) {
+  try {
+    if (!existsSync(filePath)) return null;
+    return JSON.parse(readFileSync(filePath, 'utf-8'));
+  } catch {
+    return null;
+  }
+}
+
+function extractIdsFromUrl(url) {
+  if (!url) return { projectId: null, fileId: null };
+  try {
+    const parsed = new URL(url);
+    const parts = parsed.pathname.split('/').filter(Boolean);
+    if (parts[0] === 'view' && parts.length >= 3) {
+      return { projectId: parts[1] ?? null, fileId: parts[2] ?? null };
+    }
+    if (parts[0] === 'view' && parts.length >= 2) {
+      return { projectId: null, fileId: parts[1] ?? null };
+    }
+  } catch {
+    return { projectId: null, fileId: null };
+  }
+  return { projectId: null, fileId: null };
+}
+
+function buildPenpotUrls(baseUrl, fileIdValue, projectIdValue, projectUrlValue, fileUrlValue) {
+  const fileId = fileIdValue ? String(fileIdValue) : null;
+  const projectId = projectIdValue ? String(projectIdValue) : null;
+  let projectUrl = typeof projectUrlValue === 'string' ? projectUrlValue : null;
+  let fileUrl = typeof fileUrlValue === 'string' ? fileUrlValue : null;
+  if (!projectUrl && fileId && projectId) {
+    projectUrl = `${baseUrl}/view/${projectId}/${fileId}`;
+  }
+  if (!fileUrl && fileId) {
+    fileUrl = projectUrl ?? `${baseUrl}/view/${fileId}`;
+  }
+  return { projectUrl, fileUrl, fileId, projectId };
+}
+
+function candidateProjectRoots() {
+  const roots = new Set();
+  const cwd = process.cwd();
+  roots.add(cwd);
+  roots.add(resolve(cwd, '..'));
+  roots.add(resolve(cwd, '..', '..'));
+  roots.add(resolve(cwd, '..', '..', '..'));
+  if (outputDir) {
+    roots.add(resolve(outputDir));
+    roots.add(resolve(outputDir, '..'));
+    roots.add(resolve(outputDir, '..', '..'));
+  }
+  return [...roots];
+}
+
+function resolvePenpotOpenState() {
+  const explicitBase = (process.env.PENPOT_BASE_URL || PENPOT_HOST).replace(/\/$/, '');
+  const envProjectUrl = process.env.PENPOT_PROJECT_URL || null;
+  const envFileUrl = process.env.PENPOT_FILE_URL || null;
+  const envProjectId = process.env.PENPOT_PROJECT_ID || null;
+  const envFileId = process.env.PENPOT_FILE_ID || fileId || null;
+  if (envProjectUrl || envFileUrl || envProjectId || envFileId) {
+    const idsFromUrl = extractIdsFromUrl(envProjectUrl || envFileUrl);
+    return buildPenpotUrls(
+      explicitBase,
+      envFileId || idsFromUrl.fileId,
+      envProjectId || idsFromUrl.projectId,
+      envProjectUrl,
+      envFileUrl,
+    );
+  }
+
+  for (const root of candidateProjectRoots()) {
+    const candidates = [
+      join(root, '.pakalon', 'penpot.json'),
+      join(root, '.pakalon-agents', 'ai-agents', 'phase-2', 'phase-2-manifest.json'),
+      join(root, '.pakalon-agents', 'ai-agents', 'phase-2', 'url-manifest.json'),
+      join(root, '.pakalon-agents', 'ai-agents', 'phase-2', 'penpot_meta.json'),
+    ];
+    for (const candidate of candidates) {
+      const raw = readJson(candidate);
+      if (!raw) continue;
+      const baseUrl = String(raw.base_url || raw.baseUrl || raw.penpot_base_url || explicitBase).replace(/\/$/, '');
+      const idsFromUrl = extractIdsFromUrl(raw.project_url || raw.projectUrl || raw.penpot_project_url || raw.file_url || raw.fileUrl || raw.penpot_file_url);
+      const resolved = buildPenpotUrls(
+        baseUrl,
+        raw.file_id || raw.fileId || raw.penpot_file_id || fileId || idsFromUrl.fileId,
+        raw.project_id || raw.projectId || raw.penpot_project_id || idsFromUrl.projectId,
+        raw.project_url || raw.projectUrl || raw.penpot_project_url || null,
+        raw.file_url || raw.fileUrl || raw.penpot_file_url || null,
+      );
+      if (resolved.projectUrl || resolved.fileUrl || resolved.fileId) {
+        return resolved;
+      }
+    }
+  }
+
+  return buildPenpotUrls(explicitBase, fileId, null, null, null);
+}
 
 // ─── Parse CLI args ───────────────────────────────────────────────────────────
 function parseArgs() {
@@ -106,8 +214,8 @@ Usage:
   node sync.js [command] [options]
 
 Commands:
-  --start       Start Penpot container, open browser, begin sync loop
-  --stop        Stop sync loop, then stop Penpot container
+  --start       Start Penpot, open browser, begin sync loop
+  --stop        Stop sync loop, then stop the Penpot stack
   --watch       Sync loop only (assumes Penpot is already up)
   --lifecycle   Auto-watch container state; start/stop sync automatically
 
@@ -126,6 +234,7 @@ Env vars:
   PAKALON_AGENTS_DIR   Output root dir   [default: .pakalon-agents]
 
 Examples:
+  node sync.js --start                   # start Penpot only
   node sync.js --start  --project abc  --file xyz
   node sync.js --lifecycle  --file xyz   # preferred: managed lifecycle
   node sync.js --watch  --file xyz       # manual watch after external start
@@ -136,12 +245,12 @@ Examples:
 // ─── Docker / container helpers ──────────────────────────────────────────────
 
 /**
- * Returns true when the Penpot Docker container is in "running" state.
+ * Returns true when the Penpot frontend container is in "running" state.
  */
 function isPenpotRunning() {
   try {
-    const out = execSync(
-      'docker inspect --format="{{.State.Running}}" pakalon-penpot',
+    const out = runDockerCommand(
+      ['inspect', '--format={{.State.Running}}', PENPOT_FRONTEND_CONTAINER_NAME],
       { encoding: 'utf-8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }
     );
     return out.trim() === '"true"' || out.trim() === 'true';
@@ -165,58 +274,66 @@ function isPenpotReachable() {
   });
 }
 
+async function waitForPenpotReady() {
+  console.log('[sync] Waiting for Penpot to be ready...');
+  const attempts = Math.ceil(PENPOT_READY_TIMEOUT_MS / 2000);
+
+  for (let i = 0; i < attempts; i++) {
+    if (await isPenpotReachable()) {
+      console.log('[sync] Penpot is ready');
+      return true;
+    }
+    await sleep(2000);
+  }
+
+  console.error(`[sync] Penpot did not become reachable at ${PENPOT_HOST} within ${PENPOT_READY_TIMEOUT_MS / 1000}s`);
+  return false;
+}
+
 /**
- * Start the Penpot Docker container.
+ * Start the Penpot Docker Compose stack.
  * This is the ONLY entry-point for launching Penpot — callers must use sync.js.
  */
 async function startPenpot() {
-  console.log('[sync] Starting Penpot container...');
+  console.log('[sync] Starting Penpot stack...');
 
   try {
-    // Check if the container already exists (stopped)
-    const existing = execSync(
-      'docker ps -a --filter "name=pakalon-penpot" --format="{{.Names}}"',
-      { encoding: 'utf-8', timeout: 8000, stdio: ['ignore', 'pipe', 'ignore'] }
-    );
-
-    if (existing.includes('pakalon-penpot')) {
-      execSync('docker start pakalon-penpot', { stdio: 'inherit', timeout: 30000 });
-      console.log('[sync] Existing Penpot container started');
+    if (!isPenpotRunning()) {
+      console.log('[sync] Ensuring the full Penpot stack is running (first run may take a few minutes)...');
     } else {
-      // First-time run: spin up a new container
-      execSync(
-        'docker run -d --name pakalon-penpot -p 3449:80 penpotapp/frontend:2.11.1',
-        { stdio: 'inherit', timeout: 120000 }
-      );
-      console.log('[sync] New Penpot container created and started');
+      console.log('[sync] Penpot stack already running');
     }
 
-    // Wait until HTTP is reachable (max 60 s)
-    console.log('[sync] Waiting for Penpot to be ready...');
-    for (let i = 0; i < 30; i++) {
-      if (await isPenpotReachable()) break;
-      await sleep(2000);
-    }
-    console.log('[sync] Penpot is ready');
-    return true;
+    runDockerCommand(['compose', '-f', PENPOT_COMPOSE_FILE, 'up', '-d'], { stdio: 'inherit' });
+
+    return await waitForPenpotReady();
   } catch (err) {
-    console.error('[sync] Failed to start Penpot:', err.message);
+    const message = err instanceof Error ? err.message : String(err);
+    if (err && typeof err === 'object' && err.code === 'ETIMEDOUT') {
+      console.warn('[sync] Docker timed out while starting Penpot. This can happen on the first run while images are still being pulled. Checking whether the stack is still coming up...');
+      if (await waitForPenpotReady()) {
+        console.log('[sync] Penpot finished starting after the compose timeout');
+        return true;
+      }
+    }
+    console.error('[sync] Failed to start Penpot:', message);
     return false;
   }
 }
 
 /**
- * Stop the Penpot Docker container.
+ * Stop the Penpot Docker Compose stack.
  * Called automatically when sync.js exits so Penpot lifecycle matches sync.js.
  */
 function stopPenpot() {
-  console.log('[sync] Stopping Penpot container...');
+  console.log('[sync] Stopping Penpot stack...');
   try {
-    execSync('docker stop pakalon-penpot', { stdio: 'inherit', timeout: 30000 });
-    console.log('[sync] Penpot container stopped');
+    runDockerCommand(['compose', '-f', PENPOT_COMPOSE_FILE, 'down'], { stdio: 'inherit' });
+    console.log('[sync] Penpot stack stopped');
     return true;
   } catch (err) {
-    console.error('[sync] Failed to stop Penpot:', err.message);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[sync] Failed to stop Penpot:', message);
     return false;
   }
 }
@@ -227,18 +344,31 @@ function stopPenpot() {
  * the Penpot workspace root so the user can navigate manually.
  */
 function openInBrowser(fId) {
-  const url = fId
-    ? `${PENPOT_HOST}/#/workspace/${fId}`
-    : PENPOT_HOST;
+  const resolved = resolvePenpotOpenState();
+  const url = resolved.projectUrl
+    ?? resolved.fileUrl
+    ?? (resolved.fileId && resolved.projectId
+      ? `${PENPOT_HOST}/view/${resolved.projectId}/${resolved.fileId}`
+      : resolved.fileId
+        ? `${PENPOT_HOST}/view/${resolved.fileId}`
+        : fId
+          ? `${PENPOT_HOST}/view/${fId}`
+          : null);
+
+  if (!url) {
+    console.log('[sync] No Penpot project/file metadata was found yet, so the browser will not be opened. Run Phase 2/3 first or provide a file id.');
+    return false;
+  }
 
   console.log(`[sync] Opening browser → ${url}`);
   try {
-    if (process.platform === 'win32')       execSync(`start "" "${url}"`);
-    else if (process.platform === 'darwin') execSync(`open "${url}"`);
-    else                                    execSync(`xdg-open "${url}"`);
+    if (process.platform === 'win32')       execFileSync('cmd', ['/c', 'start', '', url], { stdio: 'ignore' });
+    else if (process.platform === 'darwin') execFileSync('open', [url], { stdio: 'ignore' });
+    else                                    execFileSync('xdg-open', [url], { stdio: 'ignore' });
   } catch {
     console.warn('[sync] Could not open browser automatically. Visit:', url);
   }
+  return true;
 }
 
 // ─── Utility ──────────────────────────────────────────────────────────────────
@@ -434,6 +564,9 @@ async function main() {
   console.log(`  Interval : ${POLL_INTERVAL}ms`);
   console.log(`  Cooldown : ${COOLDOWN_PERIOD}ms`);
   console.log('─'.repeat(55));
+  if (!fileId && command !== 'stop') {
+    console.log('[sync] No file ID provided — Penpot will start, but auto-sync/export is disabled.');
+  }
 
   switch (command) {
 
@@ -502,4 +635,3 @@ export {
 
 // Run when invoked directly
 main().catch((err) => { console.error('[sync] Fatal error:', err); process.exit(1); });
-

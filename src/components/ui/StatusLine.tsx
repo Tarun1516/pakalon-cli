@@ -138,6 +138,8 @@ interface StatusLineProps {
   estimatedTokens?: number;
   /** Total context window for current model (A-01) */
   contextLimit?: number;
+  /** Last completed assistant turn usage metrics */
+  lastTurnUsage?: { promptTokens: number; completionTokens: number };
   /** Whether privacy mode is active (M-02) */
   privacyMode?: boolean;
   /** Default model display name */
@@ -172,6 +174,9 @@ const StatusLine: React.FC<StatusLineProps> = ({
   mode = "chat",
   trialDaysRemaining,
   isStreaming,
+  estimatedTokens,
+  contextLimit,
+  lastTurnUsage,
   privacyMode,
   projectDir,
 }) => {
@@ -209,6 +214,14 @@ const StatusLine: React.FC<StatusLineProps> = ({
   const shellWidth = getShellWidth(process.stdout.columns ?? 80);
   const compactLayout = shellWidth < 68;
   const extras = [
+    lastTurnUsage
+      ? `last:${(lastTurnUsage.promptTokens + lastTurnUsage.completionTokens).toLocaleString()} tok`
+      : null,
+    estimatedTokens != null && contextLimit
+      ? `ctx:${estimatedTokens.toLocaleString()}/${contextLimit.toLocaleString()}`
+      : estimatedTokens != null
+        ? `ctx:${estimatedTokens.toLocaleString()}`
+        : null,
     scriptOutput || null,
     gitInfo.ciStatus ? `ci:${CI_STATUS_LABEL[gitInfo.ciStatus]}` : null,
     isStreaming ? "live" : null,

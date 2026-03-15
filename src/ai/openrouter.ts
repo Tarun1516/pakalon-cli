@@ -144,7 +144,7 @@ function isProxyMode(opts: StreamOptions): boolean {
  * The backend holds the master OpenRouter key — users supply only their JWT.
  */
 async function streamViaProxy(opts: StreamOptions): Promise<void> {
-  const baseUrl = opts.proxyBaseUrl ?? process.env.PAKALON_API_URL ?? "http://localhost:8000";
+  const baseUrl = opts.proxyBaseUrl ?? process.env.PAKALON_API_URL ?? "http://127.0.0.1:8000";
   const url = `${baseUrl}/ai/chat/stream`;
   const token = opts.authToken ?? process.env.PAKALON_TOKEN ?? "";
 
@@ -284,6 +284,35 @@ async function streamViaProxy(opts: StreamOptions): Promise<void> {
   opts.onFinish?.(fullText, { promptTokens, completionTokens });
 }
 
+async function generateViaProxyStreamFallback(
+  opts: Omit<StreamOptions, "onChunk" | "onFinish" | "onError">
+): Promise<{ text: string; promptTokens: number; completionTokens: number }> {
+  let text = "";
+  let promptTokens = 0;
+  let completionTokens = 0;
+  let streamErr: Error | null = null;
+
+  await streamViaProxy({
+    ...opts,
+    onChunk: (chunk) => {
+      text += chunk;
+    },
+    onFinish: (_fullText, usage) => {
+      promptTokens = usage.promptTokens;
+      completionTokens = usage.completionTokens;
+    },
+    onError: (err) => {
+      streamErr = err;
+    },
+  });
+
+  if (streamErr) {
+    throw streamErr;
+  }
+
+  return { text, promptTokens, completionTokens };
+}
+
 export async function streamCompletion(opts: StreamOptions): Promise<void> {
   if (isProxyMode(opts)) {
     return streamViaProxy(opts);
@@ -364,7 +393,7 @@ export async function streamCompletion(opts: StreamOptions): Promise<void> {
 export async function generateCompletion(opts: Omit<StreamOptions, "onChunk" | "onFinish" | "onError">): Promise<{ text: string; promptTokens: number; completionTokens: number }> {
   // Proxy mode: one-shot via /ai/chat (non-streaming)
   if (isProxyMode(opts)) {
-    const baseUrl = opts.proxyBaseUrl ?? process.env.PAKALON_API_URL ?? "http://localhost:8000";
+    const baseUrl = opts.proxyBaseUrl ?? process.env.PAKALON_API_URL ?? "http://127.0.0.1:8000";
     const token = opts.authToken ?? process.env.PAKALON_TOKEN ?? "";
     const res = await fetch(`${baseUrl}/ai/chat`, {
       method: "POST",
@@ -379,11 +408,31 @@ export async function generateCompletion(opts: Omit<StreamOptions, "onChunk" | "
       }),
     });
     if (!res.ok) {
-      const json = (await res.json().catch(() => ({ detail: `HTTP ${res.status}` }))) as { detail?: string };
-      throw new Error(json.detail ?? `HTTP ${res.status}`);
+      const raw = await res.text().catch(() => "");
+      let detail = `HTTP ${res.status}`;
+      try {
+        const parsed = raw ? (JSON.parse(raw) as { detail?: string }) : null;
+        if (parsed?.detail) detail = parsed.detail;
+      } catch {
+        if (raw.trim()) detail = raw.trim();
+      }
+
+      if (res.status >= 500) {
+        try {
+          return await generateViaProxyStreamFallback(opts);
+        } catch {
+          // surface original non-streaming error when fallback also fails
+        }
+      }
+
+      throw new Error(detail);
     }
-    const data = (await res.json()) as { content: string; prompt_tokens: number; completion_tokens: number };
-    return { text: data.content, promptTokens: data.prompt_tokens, completionTokens: data.completion_tokens };
+    try {
+      const data = (await res.json()) as { content: string; prompt_tokens: number; completion_tokens: number };
+      return { text: data.content, promptTokens: data.prompt_tokens, completionTokens: data.completion_tokens };
+    } catch {
+      return generateViaProxyStreamFallback(opts);
+    }
   }
 
   const provider = getOpenRouterProvider(opts.apiKey!);

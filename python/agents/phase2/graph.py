@@ -9,6 +9,7 @@ import asyncio
 import json
 import os
 import pathlib
+from datetime import datetime, timezone
 from typing import Any, TypedDict
 
 try:
@@ -19,6 +20,7 @@ except ImportError:
 
 from ..shared.paths import get_phase_dir, get_wireframes_dir, get_tdd_screenshots_dir
 from ..shared.decision_registry import record_decision
+from ..shared.penpot_metadata import sync_penpot_artifacts, write_penpot_metadata
 
 
 class Phase2State(TypedDict, total=False):
@@ -111,6 +113,7 @@ async def generate_penpot(state: Phase2State) -> Phase2State:
     """Node: Generate Penpot wireframe from phase1 design.md + Figma data."""
     sse = state.get("send_sse") or (lambda e: None)
     sse({"type": "text_delta", "content": "🖼  Generating wireframe...\n"})
+    project_dir = pathlib.Path(state.get("project_dir", "."))
 
     phase1 = state.get("phase1_summary", {})
     figma = state.get("figma_data")
@@ -185,6 +188,24 @@ async def generate_penpot(state: Phase2State) -> Phase2State:
             if tool.last_project_url:
                 state["penpot_project_url"] = tool.last_project_url
                 sse({"type": "text_delta", "content": f"  🌐 View in Penpot: {tool.last_project_url}\n"})
+            try:
+                write_penpot_metadata(
+                    str(project_dir),
+                    {
+                        "file_id": tool.last_file_id,
+                        "project_id": getattr(tool, "last_project_id", None),
+                        "project_url": tool.last_project_url,
+                        "file_url": getattr(tool, "last_file_url", None),
+                        "revision": getattr(tool, "last_file_revn", None),
+                        "base_url": getattr(tool, "_base", os.environ.get("PENPOT_HOST") or "http://localhost:3449"),
+                        "phase": 2,
+                        "status": "draft-generated",
+                        "source": "phase2.generate_penpot",
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
+            except Exception as meta_exc:
+                sse({"type": "text_delta", "content": f"  ⚠️  Penpot metadata write skipped: {meta_exc}\n"})
     except Exception as _exc:
         sse({"type": "text_delta", "content": f"  \u26a0\ufe0f Penpot not available ({_exc}) \u2014 using basic SVG\n"})
         from .tdd import WireframeTDD
@@ -836,6 +857,9 @@ async def save_outputs(state: Phase2State) -> Phase2State:
     penpot_file_id = state.get("penpot_file_id")
     generated_json_path = out_dir / "Wireframe_generated.json"
     generated_json_written = False
+    penpot_project_id: str | None = None
+    penpot_file_url: str | None = None
+    penpot_revn: int | None = None
     if penpot_file_id:
         try:
             try:
@@ -852,6 +876,10 @@ async def save_outputs(state: Phase2State) -> Phase2State:
                 generated_json_path.write_text(json.dumps(penpot_export, indent=2))
                 saved.append(str(generated_json_path))
                 generated_json_written = True
+                if isinstance(penpot_export, dict):
+                    penpot_revn = penpot_export.get("revn")
+                penpot_project_id = getattr(_penpot, "last_project_id", None)
+                penpot_file_url = getattr(_penpot, "last_file_url", None)
                 sse({"type": "text_delta", "content": f"  🎨 Penpot JSON exported: {generated_json_path}\n"})
         except Exception as _pex:
             sse({"type": "text_delta", "content": f"  ⚠️ Penpot JSON export skipped: {_pex}\n"})
@@ -976,18 +1004,32 @@ async def save_outputs(state: Phase2State) -> Phase2State:
             _url_manifest.write_text(json.dumps(_cloud_urls, indent=2))
             saved.append(str(_url_manifest))
 
-    # T-P3-02: Save penpot_project_url to url-manifest.json for Phase 3 disk fallback
-    _url_manifest_path = out_dir / "url-manifest.json"
-    _url_manifest_data = {
-        "penpot_project_url": state.get("penpot_project_url"),
-        "penpot_file_id": state.get("penpot_file_id"),
-        "penpot_file_url": (
-            f"{os.environ.get('PENPOT_BASE_URL', 'http://localhost:3449')}/view/{state.get('penpot_file_id')}"
-            if state.get("penpot_file_id") else None
-        ),
-    }
-    _url_manifest_path.write_text(json.dumps(_url_manifest_data, indent=2))
-    saved.append(str(_url_manifest_path))
+    # Canonical project-scoped Penpot metadata + backward-compatible manifests
+    if state.get("penpot_file_id"):
+        try:
+            sync_result = sync_penpot_artifacts(
+                str(project_dir),
+                {
+                    "file_id": state.get("penpot_file_id"),
+                    "project_id": penpot_project_id,
+                    "project_url": state.get("penpot_project_url"),
+                    "file_url": penpot_file_url,
+                    "revision": penpot_revn,
+                    "base_url": os.environ.get("PENPOT_BASE_URL") or os.environ.get("PENPOT_HOST") or "http://localhost:3449",
+                    "phase": 2,
+                    "status": "approved",
+                    "source": "phase2.save_outputs",
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                    "local_svg_path": str(svg_path.resolve()),
+                    "local_json_path": str(generated_json_path.resolve()),
+                },
+            )
+            for manifest_path in sync_result["paths"].values():
+                if manifest_path not in saved:
+                    saved.append(manifest_path)
+            sse({"type": "text_delta", "content": "  🧭 Penpot project metadata synced to .pakalon/penpot.json\n"})
+        except Exception as meta_exc:
+            sse({"type": "text_delta", "content": f"  ⚠️ Penpot metadata sync skipped: {meta_exc}\n"})
 
     sse({"type": "phase_complete", "phase": 2, "files": [str(s) for s in saved]})
     return state

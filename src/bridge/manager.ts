@@ -86,7 +86,7 @@ export async function startBridge(timeoutMs = 10_000): Promise<void> {
   return _startPromise;
 }
 
-export function stopBridge(): void {
+export async function stopBridge(): Promise<void> {
   if (_bridgeProcess) {
     _bridgeProcess.kill("SIGTERM");
     _bridgeProcess = null;

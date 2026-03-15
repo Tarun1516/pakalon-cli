@@ -465,7 +465,21 @@ async function generateFileContent(
 // Main export
 // ---------------------------------------------------------------------------
 
-export async function cmdInit(cwd: string = process.cwd(), initialPrompt?: string): Promise<void> {
+export interface InitOptions {
+  dir?: string;
+  name?: string;
+  initialPrompt?: string;
+}
+
+export async function cmdInit(
+  cwdOrOptions: string | InitOptions = process.cwd(),
+  initialPromptArg?: string,
+): Promise<void> {
+  const options = typeof cwdOrOptions === "string" ? undefined : cwdOrOptions;
+  const cwd = typeof cwdOrOptions === "string"
+    ? cwdOrOptions
+    : (options?.dir ?? process.cwd());
+  const initialPrompt = options?.initialPrompt ?? initialPromptArg;
   const pakalonDir = path.join(cwd, ".pakalon");
 
   if (fs.existsSync(pakalonDir)) {
@@ -488,7 +502,7 @@ export async function cmdInit(cwd: string = process.cwd(), initialPrompt?: strin
 
   const model = process.env.PAKALON_INIT_MODEL ?? "arcee-ai/trinity-large-preview:free";
   const authToken = process.env.PAKALON_TOKEN;
-  const projectDescription = initialPrompt ?? path.basename(cwd);
+  const projectDescription = initialPrompt ?? options?.name ?? path.basename(cwd);
 
   if (useAI) {
     console.log(`  Using AI to generate planning files (model: ${model})...\n`);

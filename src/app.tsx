@@ -99,6 +99,7 @@ const App: React.FC<AppProps> = ({
   const pendingBridgeMode = useStore((s) => s.pendingBridgeMode);
   const [isCreatingStartupSession, setIsCreatingStartupSession] = React.useState(false);
   const [resolvedSessionId, setResolvedSessionId] = React.useState<string | null>(sessionId);
+  const [startupSessionError, setStartupSessionError] = React.useState<string | null>(null);
 
   // Was the user already logged in when the app started? (returning user → show text animation)
   const [wasAlreadyLoggedIn] = React.useState(isLoggedIn);
@@ -123,7 +124,11 @@ const App: React.FC<AppProps> = ({
         setCreditsBlocked(true);
         setCreditsBlockedReason(result.reason ?? "No credits remaining. Please upgrade your plan.");
       }
-    }).catch(() => { /* non-blocking on error */ });
+    }).catch((err: any) => {
+      if (err?.statusCode === 401) {
+        useStore.getState().logout();
+      }
+    });
   }, [isLoggedIn]);
 
   // --permission-mode / --plan / --edit / --auto-accept / --bypass-permissions
@@ -259,7 +264,11 @@ const App: React.FC<AppProps> = ({
           trialDaysRemaining: data.trial_days_remaining,
         });
       })
-      .catch((err) => {
+      .catch((err: any) => {
+        if (err?.statusCode === 401) {
+          logger.warn("Received 401 on /auth/me, clearing auth");
+          useStore.getState().logout();
+        }
         logger.debug("Profile sync skipped", err);
       });
 
@@ -293,79 +302,80 @@ const App: React.FC<AppProps> = ({
   }, [sessionId]);
 
   useEffect(() => {
-    if (!isLoggedIn || sessionId || sessionIdOverride || continueSession || forkSession) {
-      return;
-    }
-
-    let cancelled = false;
-    setIsCreatingStartupSession(true);
-    void cmdCreateSession(undefined, "chat", projectDir)
-      .then((session) => {
-        if (!cancelled) {
-          setResolvedSessionId(session.id);
-          useStore.getState().setSessionId(session.id);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          logger.warn("Failed to create startup session", err);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setIsCreatingStartupSession(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [continueSession, forkSession, isLoggedIn, projectDir, sessionId, sessionIdOverride]);
-
-  useEffect(() => {
     if (
       !isLoggedIn ||
       sessionId ||
       resolvedSessionId ||
       sessionIdOverride ||
       continueSession ||
-      forkSession ||
-      isCreatingStartupSession
+      forkSession
     ) {
+      setStartupSessionError(null);
       return;
     }
 
     let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-    void cmdListSessions(1, projectDir)
-      .then((sessions) => {
+    const recoverStartupSession = async () => {
+      if (cancelled) return;
+
+      setIsCreatingStartupSession(true);
+      try {
+        const session = await cmdCreateSession(undefined, "chat", projectDir);
+        if (cancelled) return;
+
+        setResolvedSessionId(session.id);
+        useStore.getState().setSessionId(session.id);
+        setStartupSessionError(null);
+        return;
+      } catch (createErr: any) {
+        if (!cancelled) {
+          logger.warn("Failed to create startup session", createErr);
+          if (createErr?.statusCode === 401) {
+            useStore.getState().logout();
+            return;
+          }
+          setStartupSessionError(createErr instanceof Error ? createErr.message : String(createErr));
+        }
+      } finally {
+        if (!cancelled) {
+          setIsCreatingStartupSession(false);
+        }
+      }
+
+      try {
+        const sessions = await cmdListSessions(1, projectDir);
         const latestSessionId = sessions[0]?.id;
-        if (!latestSessionId || cancelled) {
+        if (latestSessionId && !cancelled) {
+          setResolvedSessionId(latestSessionId);
+          useStore.getState().setSessionId(latestSessionId);
+          setStartupSessionError(null);
           return;
         }
-
-        setResolvedSessionId(latestSessionId);
-        useStore.getState().setSessionId(latestSessionId);
-      })
-      .catch((err) => {
+      } catch (listErr: any) {
         if (!cancelled) {
-          logger.warn("Failed to recover latest session id", err);
+          logger.warn("Failed to recover latest session id", listErr);
+          if (listErr?.statusCode === 401) {
+            useStore.getState().logout();
+            return;
+          }
+          setStartupSessionError(listErr instanceof Error ? listErr.message : String(listErr));
         }
-      });
+      }
+
+      if (!cancelled) {
+        retryTimer = setTimeout(recoverStartupSession, 4_000);
+      }
+    };
+
+    void recoverStartupSession();
 
     return () => {
       cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [
-    continueSession,
-    forkSession,
-    isCreatingStartupSession,
-    isLoggedIn,
-    projectDir,
-    resolvedSessionId,
-    sessionId,
-    sessionIdOverride,
-  ]);
+  }, [continueSession, forkSession, isLoggedIn, projectDir, resolvedSessionId, sessionId, sessionIdOverride]);
 
   // --file flag: read each specified file and store contents
   useEffect(() => {
@@ -589,17 +599,23 @@ const App: React.FC<AppProps> = ({
   }
 
   const activeSessionId = resolvedSessionId ?? sessionId;
-
-  if (isCreatingStartupSession && !activeSessionId) {
-    return (
-      <Box flexDirection="column" padding={1}>
-        <Text color="yellowBright">Preparing your session…</Text>
-        <Text dimColor>Creating a backend session id for this workspace.</Text>
-      </Box>
-    );
-  }
+  const showStartupSessionNotice = !activeSessionId;
 
   return (
+    <Box flexDirection="column" width="100%">
+      {showStartupSessionNotice && (
+        <Box flexDirection="column" paddingX={1} paddingY={0}>
+          <Text color="yellowBright">Preparing your session…</Text>
+          <Text dimColor>
+            {startupSessionError
+              ? `Backend session is not ready yet. Retrying automatically… (${startupSessionError})`
+              : isCreatingStartupSession
+                ? "Creating a backend session id for this workspace."
+                : "Waiting for the backend to provide a workspace session id. You can start chatting now."}
+          </Text>
+        </Box>
+      )}
+
       <ChatLayout
         initialMessage={resolvedInitialMessage}
         projectDir={projectDir}
@@ -618,7 +634,8 @@ const App: React.FC<AppProps> = ({
       systemPrompt={systemPrompt}
       playLogoAnimation={justLoggedIn || wasAlreadyLoggedIn}
       memoryBlock={memoryBlock}
-    />
+      />
+    </Box>
   );
 };
 

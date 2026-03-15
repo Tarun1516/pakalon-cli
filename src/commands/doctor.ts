@@ -15,6 +15,22 @@ interface CheckResult {
   fix?: string;
 }
 
+export interface DoctorResult {
+  tool: string;
+  ok: boolean;
+  message: string;
+  fix?: string;
+}
+
+export interface DoctorOptions {
+  json?: boolean;
+  /**
+   * When true, exits process with code 1 if any check fails.
+   * Defaults to `!json` for backward compatibility.
+   */
+  exitOnFailure?: boolean;
+}
+
 async function checkBunVersion(): Promise<CheckResult> {
   try {
     const output = execSync("bun --version", { encoding: "utf-8" }).trim();
@@ -162,7 +178,7 @@ async function checkAuth(): Promise<CheckResult> {
   }
 }
 
-export async function cmdDoctor(): Promise<void> {
+export async function cmdDoctor(options: DoctorOptions = {}): Promise<DoctorResult[]> {
   console.log("\n✦ Pakalon Doctor — System Check\n");
   console.log("─".repeat(60));
 
@@ -176,15 +192,21 @@ export async function cmdDoctor(): Promise<void> {
     checkAuth(),
   ]);
 
+  const out: DoctorResult[] = [];
   let allOk = true;
   for (const check of checks) {
     const icon = check.ok ? "✓" : "✗";
     const label = check.name.padEnd(25);
-    const color = check.ok ? "" : "";
     console.log(`  ${icon} ${label} ${check.message}`);
     if (!check.ok && check.fix) {
       console.log(`      → Fix: ${check.fix}`);
     }
+    out.push({
+      tool: check.name,
+      ok: check.ok,
+      message: check.message,
+      fix: check.fix,
+    });
     if (!check.ok) allOk = false;
   }
 
@@ -195,8 +217,12 @@ export async function cmdDoctor(): Promise<void> {
   } else {
     const failed = checks.filter((c) => !c.ok).length;
     console.log(`\n✗ ${failed} check(s) failed. Address the issues above.\n`);
-    process.exit(1);
+    const shouldExit = options.exitOnFailure ?? !options.json;
+    if (shouldExit) {
+      process.exit(1);
+    }
   }
 
   debugLog("[doctor] System check complete");
+  return out;
 }

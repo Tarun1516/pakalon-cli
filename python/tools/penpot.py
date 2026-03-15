@@ -1,6 +1,6 @@
 """
 penpot.py — Penpot wireframe generation tool for Pakalon agents.
-T099: PenpotTool via Penpot v2.11.1 REST API (Docker container).
+T099: PenpotTool via Penpot v2.11.1 REST API (Docker Compose stack).
 
 Auth notes:
   Penpot uses session-cookie auth, NOT bearer tokens for its own API.
@@ -16,21 +16,28 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import subprocess
 import uuid as _uuid_mod
+from pathlib import Path
 from typing import Any
 
 import httpx
 
-PENPOT_BASE = os.environ.get("PENPOT_BASE_URL", "http://localhost:3449")
+PENPOT_BASE = (
+    os.environ.get("PENPOT_BASE_URL")
+    or os.environ.get("PENPOT_HOST")
+    or "http://localhost:3449"
+)
 # Legacy env var — kept for back-compat, but prefer PENPOT_EMAIL/PASSWORD
 PENPOT_TOKEN = os.environ.get("PENPOT_API_TOKEN", "")
 # Penpot personal access token (hex, no "Bearer" prefix needed)
 PENPOT_ACCESS_TOKEN = os.environ.get("PENPOT_ACCESS_TOKEN", PENPOT_TOKEN)
 PENPOT_EMAIL = os.environ.get("PENPOT_EMAIL", "")
 PENPOT_PASSWORD = os.environ.get("PENPOT_PASSWORD", "")
-PENPOT_IMAGE = "penpotapp/frontend:2.11.1"
-PENPOT_CONTAINER = "pakalon-penpot"
+PENPOT_FRONTEND_CONTAINER = "pakalon-penpot-frontend"
+PENPOT_COMPOSE_FILE = str((Path(__file__).resolve().parents[1] / "penpot-compose.yml"))
+PENPOT_READY_TIMEOUT = 120
 
 # Friendly → Penpot internal field name mapping for element patches
 _PATCH_KEY_MAP: dict[str, str] = {
@@ -54,7 +61,7 @@ _PATCH_KEY_MAP: dict[str, str] = {
 class PenpotTool:
     """
     Penpot wireframe generation via REST API.
-    Manages the Docker container lifecycle.
+    Manages the Docker Compose lifecycle.
     """
 
     def __init__(
@@ -135,11 +142,25 @@ class PenpotTool:
     # Container management
     # ------------------------------------------------------------------
 
+    def _compose_command(self, *args: str) -> list[str]:
+        return ["docker", "compose", "-f", PENPOT_COMPOSE_FILE, *args]
+
+    def _is_reachable(self) -> bool:
+        try:
+            resp = httpx.get(
+                f"{self._base}/api/rpc/command/get-profile",
+                timeout=3.0,
+                follow_redirects=True,
+            )
+            return resp.status_code < 500
+        except Exception:
+            return False
+
     def is_running(self) -> bool:
-        """Check if Penpot Docker container is running."""
+        """Check if the Penpot frontend container is running."""
         try:
             result = subprocess.run(
-                ["docker", "inspect", "--format", "{{.State.Running}}", PENPOT_CONTAINER],
+                ["docker", "inspect", "--format", "{{.State.Running}}", PENPOT_FRONTEND_CONTAINER],
                 capture_output=True, text=True, timeout=5,
             )
             return result.stdout.strip() == "true"
@@ -147,26 +168,35 @@ class PenpotTool:
             return False
 
     def start_container(self) -> bool:
-        """Pull + start Penpot Docker container. Returns True on success."""
+        """Pull + start the Penpot Docker Compose stack. Returns True on success."""
         try:
-            # Check if container exists
             result = subprocess.run(
-                ["docker", "ps", "-a", "--filter", f"name={PENPOT_CONTAINER}", "--format", "{{.Names}}"],
-                capture_output=True, text=True, timeout=10,
+                self._compose_command("up", "-d"),
+                capture_output=False,
+                text=True,
+                check=True,
             )
-            if PENPOT_CONTAINER not in result.stdout:
-                # Run fresh container
-                subprocess.run(
-                    [
-                        "docker", "run", "-d",
-                        "--name", PENPOT_CONTAINER,
-                        "-p", "3449:80",
-                        PENPOT_IMAGE,
-                    ],
-                    check=True, timeout=120,
-                )
-            else:
-                subprocess.run(["docker", "start", PENPOT_CONTAINER], check=True, timeout=30)
+
+            del result
+
+            deadline = time.time() + PENPOT_READY_TIMEOUT
+            while time.time() < deadline:
+                if self._is_reachable():
+                    return True
+                time.sleep(2)
+            return False
+        except Exception:
+            return False
+
+    def stop_container(self) -> bool:
+        """Stop the Penpot Docker Compose stack."""
+        try:
+            subprocess.run(
+                self._compose_command("down"),
+                capture_output=False,
+                text=True,
+                check=True,
+            )
             return True
         except Exception:
             return False
@@ -177,8 +207,14 @@ class PenpotTool:
 
     #: ID of the last file successfully created on Penpot, or None if unavailable.
     last_file_id: str | None = None
+    #: ID of the last project successfully created on Penpot, or None if unavailable.
+    last_project_id: str | None = None
     #: Browseable Penpot URL for the last created file.
     last_project_url: str | None = None
+    #: Direct browseable URL for the last file.
+    last_file_url: str | None = None
+    #: Last known revision number for the created file.
+    last_file_revn: int | None = None
 
     def create_project(self, name: str) -> str | None:
         """
@@ -242,8 +278,8 @@ class PenpotTool:
             except json.JSONDecodeError:
                 design_spec = {"description": design_spec}
 
-        # Fallback: local SVG generation when Penpot Docker not running
-        if not self.is_running():
+        # Fallback: local SVG generation when Penpot is not ready
+        if not self.is_running() or not self._is_reachable():
             return self._generate_svg_wireframe(design_spec)
 
         try:
@@ -260,10 +296,12 @@ class PenpotTool:
                 return self._generate_svg_wireframe(design_spec)
             file_id: str = file_data["id"]
             revn: int = file_data.get("revn", 0)
+            self.last_project_id = project_id
 
             # Step 3: Build and apply all shape changes (pages + elements)
             client = self._get_session()
             changes = self._spec_to_changes(design_spec)
+            updated_revn = revn
             if changes:
                 update_resp = client.post(
                     f"{self._base}/api/rpc/command/update-file",
@@ -275,15 +313,18 @@ class PenpotTool:
                     },
                 )
                 update_resp.raise_for_status()
+                updated_revn = update_resp.json().get("revn", revn)
 
             # Step 4: Export as SVG for local preview
             svg = self.export_svg(file_id)
 
             # Step 5: Build and cache the browseable project URL
             self.last_file_id = file_id
+            self.last_file_revn = updated_revn
             self.last_project_url = (
                 f"{self._base}/view/{project_id}/{file_id}"
             )
+            self.last_file_url = self.last_project_url
             return svg
 
         except Exception:

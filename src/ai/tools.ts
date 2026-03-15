@@ -30,8 +30,169 @@ function isToolingDisabled(permissionMode: string): boolean {
   return permissionMode === "orchestration";
 }
 
+// Maintains a best-effort shell working directory across bash tool calls.
+// This lets the assistant honor user requests such as `cd src` / `Set-Location src`
+// in subsequent command executions.
+let bashSessionCwd: string | null = null;
+
+function stripOuterQuotes(value: string): string {
+  const trimmed = value.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+function resolveDirectoryTarget(targetRaw: string, baseCwd: string): string {
+  const target = stripOuterQuotes(targetRaw);
+  if (!target || target === ".") {
+    return baseCwd;
+  }
+
+  const homeDir = process.env.HOME ?? process.env.USERPROFILE;
+  if (target === "~" && homeDir) {
+    return path.resolve(homeDir);
+  }
+  if ((target.startsWith("~/") || target.startsWith("~\\")) && homeDir) {
+    return path.resolve(homeDir, target.slice(2));
+  }
+
+  return path.resolve(baseCwd, target);
+}
+
+function resolveBashInvocation(command: string, cwd?: string): {
+  command: string;
+  cwd: string;
+  persistCwd?: string;
+  shortCircuit?: {
+    success: boolean;
+    exitCode: number;
+    stdout: string;
+    stderr: string;
+  };
+} {
+  const startingCwd = cwd ? path.resolve(cwd) : (bashSessionCwd ?? process.cwd());
+
+  const directChange = command.match(/^\s*(?:cd|set-location)\s+(.+?)\s*;?\s*$/i);
+  if (directChange) {
+    const nextCwd = resolveDirectoryTarget(directChange[1] ?? "", startingCwd);
+    if (!fs.existsSync(nextCwd) || !fs.statSync(nextCwd).isDirectory()) {
+      return {
+        command,
+        cwd: startingCwd,
+        shortCircuit: {
+          success: false,
+          exitCode: 1,
+          stdout: "",
+          stderr: `Directory not found: ${nextCwd}`,
+        },
+      };
+    }
+
+    bashSessionCwd = nextCwd;
+    return {
+      command,
+      cwd: nextCwd,
+      persistCwd: nextCwd,
+      shortCircuit: {
+        success: true,
+        exitCode: 0,
+        stdout: nextCwd,
+        stderr: "",
+      },
+    };
+  }
+
+  const leadingChange = command.match(/^\s*(?:cd|set-location)\s+(.+?)\s*(?:&&|;)\s*([\s\S]+)$/i);
+  if (leadingChange) {
+    const nextCwd = resolveDirectoryTarget(leadingChange[1] ?? "", startingCwd);
+    if (!fs.existsSync(nextCwd) || !fs.statSync(nextCwd).isDirectory()) {
+      return {
+        command,
+        cwd: startingCwd,
+        shortCircuit: {
+          success: false,
+          exitCode: 1,
+          stdout: "",
+          stderr: `Directory not found: ${nextCwd}`,
+        },
+      };
+    }
+
+    const nextCommand = (leadingChange[2] ?? "").trim();
+    if (!nextCommand) {
+      bashSessionCwd = nextCwd;
+      return {
+        command,
+        cwd: nextCwd,
+        persistCwd: nextCwd,
+        shortCircuit: {
+          success: true,
+          exitCode: 0,
+          stdout: nextCwd,
+          stderr: "",
+        },
+      };
+    }
+
+    return {
+      command: nextCommand,
+      cwd: nextCwd,
+      persistCwd: nextCwd,
+    };
+  }
+
+  return {
+    command,
+    cwd: startingCwd,
+  };
+}
+
+function normalizeBashCommandForPlatform(command: string): string {
+  if (process.platform !== "win32") {
+    return command;
+  }
+
+  let normalized = command;
+  // Replace `mkdir -p <dir>` with a safe cmd-compatible construct
+  // Windows `mkdir` automatically creates intermediate folders. The `if not exist` prevents errors on existing dirs.
+  normalized = normalized.replace(/\bmkdir\s+-p\s+((?:[^\s"]+|"[^"]+")+)/gi, (match, target) => {
+    const cleanTarget = target.trim();
+    // Wrap in cmd.exe conditional to avoid "already exists" errors
+    return `if not exist ${cleanTarget} mkdir ${cleanTarget}`;
+  });
+
+  return normalized;
+}
+
+function countLines(text: string): number {
+  if (!text) return 0;
+  return text.split(/\r?\n/).length;
+}
+
+function computeLineDelta(previousContent: string | null, updatedContent: string): { added: number; deleted: number } {
+  const prevLines = countLines(previousContent ?? "");
+  const nextLines = countLines(updatedContent);
+  return {
+    added: Math.max(0, nextLines - prevLines),
+    deleted: Math.max(0, prevLines - nextLines),
+  };
+}
+
+function recordSessionFileChange(filePath: string, previousContent: string | null, updatedContent: string): void {
+  try {
+    const { added, deleted } = computeLineDelta(previousContent, updatedContent);
+    useStore.getState().recordFileChange(filePath, added, deleted);
+  } catch {
+    // Non-critical — ignore errors from stats tracking
+  }
+}
+
 export const readFileTool = tool({
-  description: "Read the content of a file from the filesystem",
+  description: "Read the content of a file from the filesystem. IMPORTANT: Use this tool instead of bash 'cat', 'type', or 'head' commands for reading files - it's more efficient.",
   inputSchema: z.object({
     filePath: z.string().describe("Absolute or relative path to the file"),
     maxBytes: z.number().optional().describe("Max bytes to read (default 32768)"),
@@ -68,7 +229,7 @@ export const readFileTool = tool({
 });
 
 export const writeFileTool = tool({
-  description: "Write content to a file on the filesystem",
+  description: "Write content to a file on the filesystem. IMPORTANT: Use this tool instead of bash commands like 'echo', 'printf', or redirect operators (>) for file creation. This is more efficient and cross-platform.",
   inputSchema: z.object({
     filePath: z.string().describe("Path to write to"),
     content: z.string().describe("The content to write"),
@@ -85,11 +246,27 @@ export const writeFileTool = tool({
       };
     }
 
+    const abs = path.resolve(filePath);
+    let previousContent: string | null = null;
+    try {
+      previousContent = fs.existsSync(abs) ? fs.readFileSync(abs, "utf-8") : null;
+    } catch {
+      previousContent = null;
+    }
+
+    if (!append && previousContent !== null && previousContent === content) {
+      return {
+        success: true,
+        path: abs,
+        noChange: true,
+        message: "File already up to date. No write performed.",
+      };
+    }
+
     // Edit mode: ask human for permission before writing
     // Skip if user chose "accept all" this session
     const autoAccept = (globalThis as Record<string, unknown>).PAKALON_PERMISSION_AUTO_ACCEPT === true;
     if (isInteractivePermissionMode(permissionMode) && !autoAccept) {
-      const abs = path.resolve(filePath);
       const allowed = await permissionGate.requestPermission(
         "writeFile",
         `${append ? "Append to" : "Write"} file: ${abs}`,
@@ -101,13 +278,7 @@ export const writeFileTool = tool({
     }
 
     try {
-      const abs = path.resolve(filePath);
       fs.mkdirSync(path.dirname(abs), { recursive: true });
-
-      // Snapshot for undo (before writing)
-      const previousContent = fs.existsSync(abs)
-        ? fs.readFileSync(abs, "utf-8")
-        : null;
 
       await runPreWriteHooks(abs);
       if (append) {
@@ -120,15 +291,8 @@ export const writeFileTool = tool({
       await runPostWriteHooks(abs);
 
       // Record session file-change stats for the FileChangeSummary panel
-      try {
-        const prevLines = previousContent ? previousContent.split("\n").length : 0;
-        const newLines = content.split("\n").length;
-        const added = Math.max(0, newLines - prevLines);
-        const deleted = Math.max(0, prevLines - newLines);
-        useStore.getState().recordFileChange(abs, added, deleted);
-      } catch {
-        // Non-critical — ignore errors from stats tracking
-      }
+      const updatedContent = append ? `${previousContent ?? ""}${content}` : content;
+      recordSessionFileChange(abs, previousContent, updatedContent);
 
       // T-LSP-04: fetch diagnostics after write so the AI sees errors immediately
       let lspDiagnostics: unknown[] = [];
@@ -159,7 +323,7 @@ export const writeFileTool = tool({
 });
 
 export const listDirTool = tool({
-  description: "List files and directories at a given path",
+  description: "List files and directories at a given path. IMPORTANT: Use this tool instead of bash 'ls' or 'dir' commands for directory listing. This is more efficient.",
   inputSchema: z.object({
     dirPath: z.string().describe("Directory to list"),
     recursive: z.boolean().optional().describe("Recursively list (default false)"),
@@ -206,7 +370,11 @@ export const listDirTool = tool({
 });
 
 export const bashTool = tool({
-  description: "Execute a shell command and return stdout/stderr",
+  description:
+    "Execute a shell command and return stdout/stderr. " +
+    "IMPORTANT: Prefer specialized tools (readFile, writeFile, editFile, listDir, globFind, grepSearch) over bash for file operations. " +
+    "Use bash only for commands that cannot be done with other tools (e.g., git, npm, docker, pytest, cargo). " +
+    "Supports working-directory changes via `cd` or `Set-Location` across calls.",
   inputSchema: z.object({
     command: z.string().describe("Shell command to execute"),
     cwd: z.string().optional().describe("Working directory"),
@@ -246,23 +414,41 @@ export const bashTool = tool({
       }
     }
 
+    // T-HK-14: Source PAKALON_ENV_FILE before command if present
+    const envFilePath = process.env["PAKALON_ENV_FILE"];
+    const envFilePrefix = envFilePath && require("fs").existsSync(envFilePath)
+      ? `. "${envFilePath}" 2>/dev/null; `
+      : "";
+
+    const invocation = resolveBashInvocation(command, cwd);
+    if (invocation.shortCircuit) {
+      return {
+        ...invocation.shortCircuit,
+        cwd: invocation.cwd,
+      };
+    }
+
+    const effectiveCommand = invocation.command;
+    const normalizedCommand = normalizeBashCommandForPlatform(effectiveCommand);
+    const effectiveCwd = invocation.cwd;
+
     try {
       await runPreBashHooks(command);
-      // T-HK-14: Source PAKALON_ENV_FILE before command if present
-      const envFilePath = process.env["PAKALON_ENV_FILE"];
-      const envFilePrefix = envFilePath && require("fs").existsSync(envFilePath)
-        ? `. "${envFilePath}" 2>/dev/null; `
-        : "";
       const bashResult = withExitCode(() => {
-        const rawStdout = execSync(envFilePrefix + command, {
-          cwd: cwd ? path.resolve(cwd) : process.cwd(),
+        const rawStdout = execSync(envFilePrefix + normalizedCommand, {
+          cwd: effectiveCwd,
           timeout,
           encoding: "utf-8",
           stdio: ["pipe", "pipe", "pipe"],
         });
-        return { stdout: String(rawStdout).slice(0, 16384), stderr: "", exitCode: 0 };
-      }, false, /* throwOnExit2= */ true);      await runPostBashHooks(command);
-      return bashResult;    } catch (exit2Err) {
+        return { stdout: String(rawStdout).slice(0, 16384), stderr: "", exitCode: 0, cwd: effectiveCwd };
+      }, false, /* throwOnExit2= */ true);
+      if (invocation.persistCwd) {
+        bashSessionCwd = invocation.persistCwd;
+      }
+      await runPostBashHooks(command);
+      return bashResult;
+    } catch (exit2Err) {
       if (exit2Err instanceof BlockedByExit2Error) {
         // Surface exit 2 as a permission-request to the TUI
         const message = exit2Err.message || "Command exited with code 2 — user action required";
@@ -282,13 +468,13 @@ export const bashTool = tool({
         }
         // User approved — re-run without exit-2 blocking
         return withExitCode(() => {
-          const rawStdout = execSync(envFilePrefix + command, {
-            cwd: cwd ? path.resolve(cwd) : process.cwd(),
+          const rawStdout = execSync(envFilePrefix + normalizedCommand, {
+            cwd: effectiveCwd,
             timeout,
             encoding: "utf-8",
             stdio: ["pipe", "pipe", "pipe"],
           });
-          return { stdout: String(rawStdout).slice(0, 16384), stderr: "", exitCode: 0 };
+          return { stdout: String(rawStdout).slice(0, 16384), stderr: "", exitCode: 0, cwd: effectiveCwd };
         }, false, false);
       }
       throw exit2Err;
@@ -617,6 +803,7 @@ export const listFilesTool = tool({
 export const editFileTool = tool({
   description:
     "Edit a file by replacing a specific string or section with new content. " +
+    "IMPORTANT: Use this tool instead of sed, awk, or bash redirection for file modifications. " +
     "Safer than writeFile — only changes the specified region. " +
     "Use oldString to uniquely identify the text to replace and newString for the replacement.",
   inputSchema: z.object({
@@ -666,6 +853,7 @@ export const editFileTool = tool({
       undoManager.record(abs, updated, previousContent);
       fs.writeFileSync(abs, updated, "utf-8");
       await runPostEditHooks(abs);
+      recordSessionFileChange(abs, previousContent, updated);
 
       // T-LSP-04: fetch diagnostics after edit so the AI sees errors immediately
       let editDiagnostics: unknown[] = [];
@@ -751,6 +939,7 @@ export const multiEditFilesTool = tool({
         undoManager.record(abs, updated, previousContent);
         fs.writeFileSync(abs, updated, "utf-8");
         await runPostEditHooks(abs);
+        recordSessionFileChange(abs, previousContent, updated);
         results.push({ filePath: abs, success: true, replacements: occurrences });
       } catch (err) {
         results.push({ filePath: edit.filePath, success: false, error: String(err) });
@@ -769,6 +958,7 @@ export const multiEditFilesTool = tool({
 export const globFindTool = tool({
   description:
     "Find files matching a glob pattern. " +
+    "IMPORTANT: Use this tool instead of bash 'find' command - it's more efficient. " +
     "Examples: '**/*.ts', 'src/**/*.test.ts', 'components/*.tsx'. " +
     "Returns matching file paths relative to the search directory.",
   inputSchema: z.object({
@@ -825,6 +1015,7 @@ export const globFindTool = tool({
 export const grepSearchTool = tool({
   description:
     "Search for a pattern across files using grep-style matching. " +
+    "IMPORTANT: Use this tool instead of bash 'grep' command - it's more efficient and doesn't require shell execution. " +
     "Returns matching lines with file:line information. " +
     "Supports regex patterns.",
   inputSchema: z.object({
@@ -1100,6 +1291,96 @@ export const webSearchTool = tool({
 });
 
 // ---------------------------------------------------------------------------
+// Programmatic Orchestration tool — batch tool execution via bridge
+// ---------------------------------------------------------------------------
+
+export const orchestrateTool = tool({
+  description:
+    "Execute a batch of low-level project operations (read/search/list/glob/command) in one request and return only structured results. " +
+    "Use this to reduce multi-step tool chatter for large codebase analysis tasks. " +
+    "Supported tool_name values: read_file, list_dir, glob_find, grep_search, run_command.",
+  inputSchema: z.object({
+    tools: z.array(
+      z.object({
+        tool_name: z.enum(["read_file", "list_dir", "glob_find", "grep_search", "run_command"]).describe("Operation to run in orchestrator"),
+        params: z.record(z.any()).describe("Arguments for the selected operation"),
+      })
+    ).min(1).describe("Ordered list of orchestrated operations"),
+    parallel: z.boolean().optional().default(false).describe("Run operations concurrently where possible"),
+    allowMutation: z.boolean().optional().default(false).describe("Allow mutating commands for run_command. Keep false for safe read-only orchestration."),
+    projectDir: z.string().optional().describe("Project root for sandboxed execution (defaults to current working directory)"),
+  }),
+  execute: async ({ tools, parallel = false, allowMutation = false, projectDir }) => {
+    const { permissionMode } = useStore.getState();
+
+    if (isToolingDisabled(permissionMode)) {
+      return {
+        error: "Orchestration blocked: orchestration mode is Q&A only.",
+        blocked: true,
+        permissionMode,
+      };
+    }
+
+    if (permissionMode === "plan" && allowMutation) {
+      return {
+        error: "Orchestration with allowMutation=true is blocked in plan mode.",
+        blocked: true,
+        permissionMode,
+      };
+    }
+
+    if (isInteractivePermissionMode(permissionMode) && allowMutation) {
+      const allowed = await permissionGate.requestPermission(
+        "orchestrateTool",
+        `Run orchestrated batch with ${tools.length} step(s)${parallel ? " in parallel" : ""}`,
+        {
+          stepCount: tools.length,
+          parallel,
+          allowMutation,
+        },
+      );
+      if (!allowed) {
+        return {
+          error: "Orchestration declined by user.",
+          blocked: true,
+          permissionMode,
+        };
+      }
+    }
+
+    try {
+      const payload = {
+        tools,
+        parallel,
+        allow_mutation: allowMutation,
+        project_dir: projectDir ?? process.cwd(),
+      };
+
+      const resp = await fetch(`${BRIDGE_URL}/agent/orchestrate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!resp.ok) {
+        return {
+          error: `Bridge /agent/orchestrate returned HTTP ${resp.status}`,
+          status: resp.status,
+        };
+      }
+
+      const data = await resp.json();
+      return data;
+    } catch (err) {
+      logger.error("orchestrate tool error", { err: String(err) });
+      return {
+        error: String(err),
+      };
+    }
+  },
+});
+
+// ---------------------------------------------------------------------------
 // Todo Read / Write tools — T-CLI-TODO
 // Per-session todo list stored in .pakalon/todos.json in the working directory.
 // ---------------------------------------------------------------------------
@@ -1107,10 +1388,37 @@ export const webSearchTool = tool({
 interface TodoItem {
   id: number;
   content: string;
-  /** "pending" | "in_progress" | "done" */
-  status: "pending" | "in_progress" | "done";
+  /** "pending" | "in_progress" | "completed" */
+  status: "pending" | "in_progress" | "completed";
   createdAt: string;
   updatedAt: string;
+}
+
+function normalizeTodoStatus(status: unknown): TodoItem["status"] {
+  if (status === "pending" || status === "in_progress" || status === "completed") {
+    return status;
+  }
+  // Backward compatibility for older persisted todos.
+  if (status === "done") {
+    return "completed";
+  }
+  return "pending";
+}
+
+function normalizeTodoItem(item: unknown, fallbackId: number): TodoItem {
+  const record = (item && typeof item === "object") ? item as Record<string, unknown> : {};
+  const rawId = typeof record.id === "number" ? record.id : fallbackId;
+  const content = typeof record.content === "string" ? record.content : "";
+  const createdAt = typeof record.createdAt === "string" ? record.createdAt : new Date().toISOString();
+  const updatedAt = typeof record.updatedAt === "string" ? record.updatedAt : createdAt;
+
+  return {
+    id: rawId,
+    content,
+    status: normalizeTodoStatus(record.status),
+    createdAt,
+    updatedAt,
+  };
 }
 
 function _getTodosPath(): string {
@@ -1121,7 +1429,9 @@ function _readTodosSync(): TodoItem[] {
   try {
     const todosPath = _getTodosPath();
     if (!fs.existsSync(todosPath)) return [];
-    return JSON.parse(fs.readFileSync(todosPath, "utf-8")) as TodoItem[];
+    const parsed = JSON.parse(fs.readFileSync(todosPath, "utf-8")) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((item, index) => normalizeTodoItem(item, index + 1));
   } catch {
     return [];
   }
@@ -1139,12 +1449,12 @@ function _writeTodosSync(todos: TodoItem[]): void {
 export const todoReadTool = tool({
   description:
     "Read the current todo list for this session/project. " +
-    "Returns all todo items with their id, content, status (pending/in_progress/done), and timestamps. " +
+    "Returns all todo items with their id, content, status (pending/in_progress/completed), and timestamps. " +
     "Use this to check what tasks have been completed or are in progress. " +
     "This is a read-only operation — safe in plan mode.",
   inputSchema: z.object({
     statusFilter: z
-      .enum(["all", "pending", "in_progress", "done"])
+      .enum(["all", "pending", "in_progress", "completed"])
       .optional()
       .default("all")
       .describe("Filter todos by status (default: all)"),
@@ -1158,7 +1468,7 @@ export const todoReadTool = tool({
       filtered: filtered.length,
       pending: todos.filter((t) => t.status === "pending").length,
       in_progress: todos.filter((t) => t.status === "in_progress").length,
-      done: todos.filter((t) => t.status === "done").length,
+      completed: todos.filter((t) => t.status === "completed").length,
     };
   },
 });
@@ -1167,20 +1477,28 @@ export const todoWriteTool = tool({
   description:
     "Add, update, or delete todo items in the session todo list. " +
     "Use this to track tasks you plan to complete, mark tasks as in-progress when you start them, " +
-    "and mark them done when finished. Todos persist across the session in .pakalon/todos.json.",
+    "and mark them completed when finished. Todos persist across the session in .pakalon/todos.json.",
   inputSchema: z.object({
-    operation: z.enum(["add", "update", "delete", "clear_done"]).describe(
-      "Operation to perform: 'add' a new todo, 'update' status/content of an existing todo, 'delete' a todo by id, 'clear_done' removes all done todos"
+    operation: z.enum(["add", "update", "delete", "clear_done", "clear_completed"]).optional().describe(
+      "Operation to perform: 'add' a new todo, 'update' status/content of an existing todo, 'delete' a todo by id, 'clear_done'/'clear_completed' removes all completed todos"
+    ),
+    action: z.enum(["add", "update", "delete", "clear_done", "clear_completed"]).optional().describe(
+      "Alias for operation. Prefer operation, but action is accepted for compatibility with planner outputs."
     ),
     content: z.string().optional().describe("Todo content text (required for 'add'; optional for 'update')"),
     id: z.number().optional().describe("Todo id (required for 'update' and 'delete')"),
-    status: z.enum(["pending", "in_progress", "done"]).optional().describe("New status (used with 'update')"),
+    status: z.enum(["pending", "in_progress", "completed", "done"]).optional().describe("New status (used with 'update'; 'done' is accepted as an alias for 'completed')"),
   }),
-  execute: async ({ operation, content, id, status }) => {
+  execute: async ({ operation, action, content, id, status }) => {
     const todos = _readTodosSync();
     const now = new Date().toISOString();
+    const resolvedOperation = operation ?? action;
 
-    switch (operation) {
+    if (!resolvedOperation) {
+      return { error: "operation (or action alias) is required" };
+    }
+
+    switch (resolvedOperation) {
       case "add": {
         if (!content?.trim()) return { error: "content is required for 'add'" };
         const newId = todos.length > 0 ? Math.max(...todos.map((t) => t.id)) + 1 : 1;
@@ -1200,7 +1518,7 @@ export const todoWriteTool = tool({
         const idx = todos.findIndex((t) => t.id === id);
         if (idx === -1) return { error: `Todo id ${id} not found` };
         if (content) todos[idx]!.content = content.trim();
-        if (status) todos[idx]!.status = status;
+        if (status) todos[idx]!.status = normalizeTodoStatus(status);
         todos[idx]!.updatedAt = now;
         _writeTodosSync(todos);
         return { success: true, operation: "update", todo: todos[idx] };
@@ -1213,14 +1531,15 @@ export const todoWriteTool = tool({
         _writeTodosSync(remaining);
         return { success: true, operation: "delete", deleted_id: id };
       }
-      case "clear_done": {
-        const remaining = todos.filter((t) => t.status !== "done");
+      case "clear_done":
+      case "clear_completed": {
+        const remaining = todos.filter((t) => t.status !== "completed");
         const cleared = todos.length - remaining.length;
         _writeTodosSync(remaining);
-        return { success: true, operation: "clear_done", cleared_count: cleared };
+        return { success: true, operation: "clear_completed", cleared_count: cleared };
       }
       default:
-        return { error: `Unknown operation: ${operation}` };
+        return { error: `Unknown operation: ${resolvedOperation}` };
     }
   },
 });
@@ -1398,6 +1717,7 @@ export const allTools = {
   lspSymbols: lspSymbolsTool,
   webFetch: webFetchTool,
   webSearch: webSearchTool,
+  orchestrate: orchestrateTool,
   todoRead: todoReadTool,
   todoWrite: todoWriteTool,
   notebookRead: notebookReadTool,

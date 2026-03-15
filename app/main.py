@@ -7,6 +7,21 @@ import sys
 from pathlib import Path
 
 
+def _inject_backend_site_packages(backend_root: Path) -> None:
+    candidates = [
+        backend_root / "env" / "Lib" / "site-packages",
+        backend_root / ".venv" / "Lib" / "site-packages",
+    ]
+
+    unix_root = backend_root / ".venv" / "lib"
+    if unix_root.exists():
+        candidates.extend(unix_root.glob("python*/site-packages"))
+
+    for candidate in candidates:
+        if candidate.exists() and str(candidate) not in sys.path:
+            sys.path.insert(0, str(candidate))
+
+
 _backend_root = Path(__file__).resolve().parents[2] / "pakalon-backend"
 _backend_main = _backend_root / "app" / "main.py"
 
@@ -15,6 +30,8 @@ if not _backend_main.exists():
         f"Could not find backend application at {_backend_main}. "
         "Start the command from pakalon-backend or restore the backend app files."
     )
+
+_inject_backend_site_packages(_backend_root)
 
 if str(_backend_root) not in sys.path:
     sys.path.insert(0, str(_backend_root))

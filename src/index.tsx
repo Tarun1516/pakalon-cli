@@ -10,6 +10,7 @@ import { hideBin } from "yargs/helpers";
 import App from "@/app.js";
 import BuildScreen from "@/components/screens/BuildScreen.js";
 import SplashLoginScreen from "@/frontend/screens/SplashLoginScreen.js";
+import { ErrorBoundary } from "@/components/ErrorBoundary.js";
 import { logout } from "@/auth/device-flow.js";
 import { isAuthenticated } from "@/auth/storage.js";
 import { cmdListModels, cmdSetModel, formatModelsTable } from "@/commands/model.js";
@@ -40,6 +41,17 @@ import { EXIT_SUCCESS, EXIT_AUTH_ERROR, EXIT_API_ERROR } from "@/utils/exit-code
 import { initTelemetry, shutdownTelemetry } from "@/utils/telemetry.js";
 
 async function main() {
+  // Global error handling to prevent unhandled rejections/exceptions from exiting the process
+  process.on('unhandledRejection', (reason) => {
+    console.error('Unhandled promise rejection:', reason);
+    // Continue running; the error will be handled elsewhere or logged
+  });
+
+  process.on('uncaughtException', (err) => {
+    console.error('Uncaught exception:', err);
+    // Continue running; this is a last-resort log
+  });
+
   // T-CLI-OTEL: initialise OpenTelemetry when PAKALON_ENABLE_TELEMETRY=1
   await initTelemetry();
   const argv = await yargs(hideBin(process.argv))
@@ -187,45 +199,47 @@ async function main() {
 
         const projectDir = resolvedProjectDir;
         await render(
-          React.createElement(App, {
-            initialMessage: finalMessage || undefined,
-            projectDir,
-            forceAgent: args.agent ?? false,
-            showBanner: args["no-banner"] ? false : true,
-            permissionMode: (
-              isTeammateMode ? "plan" :
-              args["plan"] ? "plan" :
-              args["edit"] ? "normal" :
-              args["auto-accept"] ? "auto-accept" :
-              args["bypass-permissions"] ? "auto-accept" :
-              args["permission-mode"] as "plan" | "normal" | "auto-accept" | "orchestration" | "edit" | "bypass" | undefined
-            ),
-            modelOverride: args.model,
-            defaultModel: args.defaultModel,
-            fallbackModel: args.fallbackModel,
-            sessionIdOverride: args["session-id"],
-            addDirs: (args["add-dir"] as string[] | undefined) ?? [],
-            allowedTools: args.allowedTools ?? undefined,
-            mcpServers: (args["MCP"] as string[] | undefined) ?? [],
-            forkSession: args["fork-session"] ?? false,
-            replayUserMessages: args["replay-user-messages"] ?? false,
-            continueSession: args["continue"] ?? false,
-            fileContexts: (args["file"] as string[] | undefined) ?? [],
-            settingsFile: args["settings"] as string | undefined,
-            maxBudgetUsd: args["max-budget-usd"] as number | undefined,
-            mcpConfigFile: args["mcp-config"] as string | undefined,
-            disableSlashCommands: (args as any)["disable-slash-commands"] ?? false,
-            systemPrompt: buildSystemPrompt({
-              systemPrompt: args["system-prompt"] as string | undefined,
-              systemPromptFile: args["system-prompt-file"] as string | undefined,
-              appendSystemPrompt: args["append-system-prompt"] as string | undefined,
-              appendSystemPromptFile: args["append-system-prompt-file"] as string | undefined,
-            }) || undefined,
-            fromPr: args["from-pr"] as string | undefined,
-            ideMode: ideMode ?? undefined,
-            teammateMode: isTeammateMode,
-            betas: betaFlags,
-          })
+          React.createElement(ErrorBoundary, null,
+            React.createElement(App, {
+              initialMessage: finalMessage || undefined,
+              projectDir,
+              forceAgent: args.agent ?? false,
+              showBanner: args["no-banner"] ? false : true,
+              permissionMode: (
+                isTeammateMode ? "plan" :
+                args["plan"] ? "plan" :
+                args["edit"] ? "normal" :
+                args["auto-accept"] ? "auto-accept" :
+                args["bypass-permissions"] ? "auto-accept" :
+                args["permission-mode"] as "plan" | "normal" | "auto-accept" | "orchestration" | "edit" | "bypass" | undefined
+              ),
+              modelOverride: args.model,
+              defaultModel: args.defaultModel,
+              fallbackModel: args.fallbackModel,
+              sessionIdOverride: args["session-id"],
+              addDirs: (args["add-dir"] as string[] | undefined) ?? [],
+              allowedTools: args.allowedTools ?? undefined,
+              mcpServers: (args["MCP"] as string[] | undefined) ?? [],
+              forkSession: args["fork-session"] ?? false,
+              replayUserMessages: args["replay-user-messages"] ?? false,
+              continueSession: args["continue"] ?? false,
+              fileContexts: (args["file"] as string[] | undefined) ?? [],
+              settingsFile: args["settings"] as string | undefined,
+              maxBudgetUsd: args["max-budget-usd"] as number | undefined,
+              mcpConfigFile: args["mcp-config"] as string | undefined,
+              disableSlashCommands: (args as any)["disable-slash-commands"] ?? false,
+              systemPrompt: buildSystemPrompt({
+                systemPrompt: args["system-prompt"] as string | undefined,
+                systemPromptFile: args["system-prompt-file"] as string | undefined,
+                appendSystemPrompt: args["append-system-prompt"] as string | undefined,
+                appendSystemPromptFile: args["append-system-prompt-file"] as string | undefined,
+              }) || undefined,
+              fromPr: args["from-pr"] as string | undefined,
+              ideMode: ideMode ?? undefined,
+              teammateMode: isTeammateMode,
+              betas: betaFlags,
+            })
+          )
         ).waitUntilExit();
       }
     )
@@ -248,8 +262,13 @@ async function main() {
       process.exit(EXIT_SUCCESS);
     })
     .command("logout", "Log out and clear credentials", {}, async () => {
-      await logout();
-      console.log("✓ Logged out");
+      const result = await logout();
+      const backendStatus = result.backendLogoutAttempted
+        ? (result.backendLogoutSucceeded ? "backend token revoked" : "backend revocation unavailable")
+        : "no backend token to revoke";
+      console.log(result.webLogoutAttempted
+        ? `✓ Logged out (${backendStatus}) and opened website sign-out: ${result.webLogoutUrl}`
+        : `✓ Logged out (${backendStatus})`);
       process.exit(EXIT_SUCCESS);
     })
     .command(

@@ -24,8 +24,29 @@ export interface HistoryOptions {
   includePartialMessages?: boolean;
 }
 
-export async function cmdHistory(limit: number = 20, opts: HistoryOptions = {}): Promise<void> {
-  const { projectDir, jsonSchema = false, includePartialMessages = false } = opts;
+export interface HistoryCommandInput extends HistoryOptions {
+  limit?: number;
+  /** Backward-compatible alias for jsonSchema output + return value */
+  json?: boolean;
+}
+
+export async function cmdHistory(
+  limitOrInput: number | HistoryCommandInput = 20,
+  opts: HistoryOptions = {},
+): Promise<SessionSummary[] | void> {
+  const input = typeof limitOrInput === "number" ? undefined : limitOrInput;
+  const limit = typeof limitOrInput === "number" ? limitOrInput : (input?.limit ?? 20);
+  const merged: HistoryOptions = {
+    ...opts,
+    ...(input ? {
+      projectDir: input.projectDir,
+      jsonSchema: input.jsonSchema,
+      includePartialMessages: input.includePartialMessages,
+    } : {}),
+  };
+
+  const jsonOutput = Boolean(input?.json);
+  const { projectDir, jsonSchema = false, includePartialMessages = false } = merged;
   try {
     const api = getApiClient();
     const params: Record<string, unknown> = { limit: 100 };
@@ -41,10 +62,13 @@ export async function cmdHistory(limit: number = 20, opts: HistoryOptions = {}):
 
     const recent = sessions.slice(0, limit);
 
-    if (jsonSchema) {
+    if (jsonSchema || jsonOutput) {
       // Output full JSON array for piping / scripting
-      console.log(JSON.stringify(recent, null, 2));
-      return;
+      if (!jsonOutput) {
+        console.log(JSON.stringify(recent, null, 2));
+        return;
+      }
+      return recent;
     }
 
     console.log(`\n── Session History (${recent.length} of ${sessions.length}) ──────────────\n`);
@@ -89,6 +113,9 @@ export async function cmdHistory(limit: number = 20, opts: HistoryOptions = {}):
     debugLog(`[history] Listed ${recent.length} sessions`);
   } catch (err) {
     debugLog(`[history] Error: ${String(err)}`);
+    if (jsonOutput || jsonSchema) {
+      return [];
+    }
     console.error("Failed to fetch history:", String(err));
     process.exit(1);
   }

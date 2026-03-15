@@ -4,9 +4,10 @@
 import { execSync } from "child_process";
 import { debugLog } from "@/utils/logger.js";
 
-interface NpmPackageInfo {
-  "dist-tags": { latest: string };
-  version?: string;
+export interface UpdateCheckResult {
+  currentVersion: string;
+  latestVersion: string;
+  needsUpdate: boolean;
 }
 
 async function getLatestVersion(): Promise<string | null> {
@@ -44,22 +45,27 @@ function compareVersions(current: string, latest: string): number {
   return 0;
 }
 
+export async function checkForUpdate(): Promise<UpdateCheckResult> {
+  const currentVersion = getCurrentVersion();
+  const latestVersion = await getLatestVersion();
+  const resolvedLatest = latestVersion ?? currentVersion;
+
+  return {
+    currentVersion,
+    latestVersion: resolvedLatest,
+    needsUpdate: compareVersions(currentVersion, resolvedLatest) < 0,
+  };
+}
+
 export async function cmdUpdateCli(opts: { yes?: boolean } = {}): Promise<void> {
   console.log("\n✦ Checking for updates...\n");
 
-  const current = getCurrentVersion();
+  const { currentVersion: current, latestVersion: latest, needsUpdate } = await checkForUpdate();
   console.log(`  Current version: ${current}`);
-
-  const latest = await getLatestVersion();
-  if (!latest) {
-    console.error("  ✗ Could not check latest version. Check your internet connection.");
-    process.exit(1);
-  }
 
   console.log(`  Latest version:  ${latest}`);
 
-  const cmp = compareVersions(current, latest);
-  if (cmp >= 0) {
+  if (!needsUpdate) {
     console.log("\n✓ Pakalon is already up to date!\n");
     return;
   }

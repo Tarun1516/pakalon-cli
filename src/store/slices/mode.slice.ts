@@ -22,7 +22,7 @@ const PERMISSION_CYCLE: PermissionMode[] = ["plan", "auto-accept", "orchestratio
 export function normalizePermissionMode(mode?: PermissionMode | LegacyPermissionMode | null): PermissionMode {
   if (mode === "edit") return "normal";
   if (mode === "bypass") return "auto-accept";
-  return mode ?? "plan";
+  return mode ?? "normal";
 }
 
 /** Parameters for the 6-phase bridge pipeline launched via /build */
@@ -91,7 +91,7 @@ export const createModeSlice: StateCreator<
   ModeState
 > = (set) => ({
   mode: "chat",
-  permissionMode: "plan",
+  permissionMode: "normal",
   thinkingEnabled: false,
   isAgentRunning: false,
   agentCurrentStep: null,

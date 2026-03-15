@@ -110,7 +110,7 @@ export async function runPrintMode(opts: PrintModeOptions): Promise<void> {
     privacyMode: opts.privacyMode ?? false,
     authToken: creds.token,
     useProxy: true,
-    proxyBaseUrl: process.env.PAKALON_API_URL ?? "http://localhost:8000",
+    proxyBaseUrl: process.env.PAKALON_API_URL ?? "http://127.0.0.1:8000",
     onThinkChunk: (chunk) => {
       if (opts.showThinking) process.stderr.write(chunk);
     },

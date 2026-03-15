@@ -116,6 +116,20 @@ export function withExitCode<T = unknown>(
         status?: number;
         message?: string;
       };
+
+      const hasProcessFields =
+        typeof e.status === "number" ||
+        typeof e.stdout !== "undefined" ||
+        typeof e.stderr !== "undefined";
+
+      if (!hasProcessFields) {
+        return {
+          success: false,
+          exitCode: 1,
+          error: String(e.message ?? err),
+        };
+      }
+
       const exitCode = e.status ?? 1;
       const stdout = String(e.stdout ?? "");
       const stderr = String(e.stderr ?? e.message ?? "");
@@ -152,6 +166,20 @@ export async function withExitCodeAsync<T = unknown>(
         status?: number;
         message?: string;
       };
+
+      const hasProcessFields =
+        typeof e.status === "number" ||
+        typeof e.stdout !== "undefined" ||
+        typeof e.stderr !== "undefined";
+
+      if (!hasProcessFields) {
+        return {
+          success: false,
+          exitCode: 1,
+          error: String(e.message ?? err),
+        };
+      }
+
       const exitCode = e.status ?? 1;
       const stdout = String(e.stdout ?? "");
       const stderr = String(e.stderr ?? e.message ?? "");

@@ -6,7 +6,7 @@ import { loadCredentials } from "@/auth/storage.js";
 import { createRetryInterceptor } from "@/utils/retry.js";
 
 const DEFAULT_BASE_URL =
-  process.env.PAKALON_API_URL ?? "http://localhost:8000";
+  process.env.PAKALON_API_URL ?? "http://127.0.0.1:8000";
 
 export function createApiClient(baseURL: string = DEFAULT_BASE_URL): AxiosInstance {
   const instance = axios.create({
@@ -60,7 +60,9 @@ export function createApiClient(baseURL: string = DEFAULT_BASE_URL): AxiosInstan
       }
 
       if (status === 401) {
-        throw new Error(`Authentication failed: ${detail}`);
+        const err = new Error(`Authentication failed: ${detail}`);
+        (err as any).statusCode = 401;
+        throw err;
       }
       if (status === 403) {
         throw new Error(`Access denied: ${detail}`);

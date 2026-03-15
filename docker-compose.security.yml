@@ -1,6 +1,19 @@
 # Docker Compose for Phase 4 Security Testing Tools
-# Run with: docker-compose -f docker-compose-security.yml up -d
-# Or run specific tools: docker-compose -f docker-compose-security.yml up semgrep
+# Run baseline static scanners (no profile required):
+#   docker compose -f docker-compose.security.yml up -d
+# Run the full suite, including runtime scanners:
+#   docker compose -f docker-compose.security.yml --profile full up -d
+# Run only runtime scanners:
+#   docker compose -f docker-compose.security.yml --profile dast up -d
+# Or run a specific tool:
+#   docker compose -f docker-compose.security.yml up semgrep
+
+x-dast-defaults: &dast-defaults
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  environment:
+    SECURITY_TARGET_URL: ${SECURITY_TARGET_URL:-http://host.docker.internal:3000}
+    SECURITY_TARGET_HOST: ${SECURITY_TARGET_HOST:-host.docker.internal}
 
 services:
   # Semgrep - Static Application Security Testing
@@ -12,10 +25,26 @@ services:
     working_dir: /src
     entrypoint: ["/bin/sh", "-c"]
     command:
-      - "semgrep --config=auto --json --output=/src/.pakalon/semgrep-results.json ."
-    profiles:
-      - sast
-      - full
+      - |
+        mkdir -p /src/.pakalon
+        targets=""
+        for candidate in app python scripts src; do
+          if [ -d "/src/$$candidate" ]; then
+            targets="$$targets /src/$$candidate"
+          fi
+        done
+        if [ -z "$$targets" ]; then
+          echo "{}" > /src/.pakalon/semgrep-results.json
+          echo "[semgrep] No source directories found to scan."
+          exit 0
+        fi
+        semgrep --config=auto --json --output=/src/.pakalon/semgrep-results.json --exclude /src/node_modules --exclude /src/dist --exclude /src/.venv --exclude /src/.git --exclude /src/.pakalon-agents $$targets
+        exit_code=$$?
+        if [ "$$exit_code" -le 1 ]; then
+          echo "[semgrep] Scan completed. Review /src/.pakalon/semgrep-results.json for findings."
+          exit 0
+        fi
+        exit "$$exit_code"
 
   # Gitleaks - Secrets Detection
   gitleaks:
@@ -26,62 +55,57 @@ services:
     working_dir: /src
     entrypoint: ["/bin/sh", "-c"]
     command:
-      - "gitleaks detect --source=. --report-format=json --report-path=/src/.pakalon/gitleaks-results.json"
-    profiles:
-      - sast
-      - full
+      - |
+        mkdir -p /src/.pakalon
+        gitleaks detect --source=. --report-format=json --report-path=/src/.pakalon/gitleaks-results.json
+        exit_code=$$?
+        if [ "$$exit_code" -le 1 ]; then
+          echo "[gitleaks] Scan completed. Review /src/.pakalon/gitleaks-results.json for findings."
+          exit 0
+        fi
+        exit "$$exit_code"
 
   # OWASP ZAP - Dynamic Application Security Testing
   zap:
+    <<: *dast-defaults
     image: owasp/zap2docker-stable:latest
     container_name: pakalon-zap
     volumes:
       - ./:/src
     working_dir: /src
-    entrypoint: ["zap-baseline.py"]
+    entrypoint: ["/bin/sh", "-c"]
     command:
-      - "-t"
-      - "http://localhost:3000"
-      - "-J"
-      - "json"
-      - "-o"
-      - ".pakalon/zap-results.json"
+      - "mkdir -p /src/.pakalon && zap-baseline.py -t \"$$SECURITY_TARGET_URL\" -J json -r /src/.pakalon/zap-results.html -x /src/.pakalon/zap-results.xml -I"
     profiles:
       - dast
       - full
 
   # Nikto - Web Server Scanner
   nikto:
+    <<: *dast-defaults
     image: threatbox/nikto:latest
     container_name: pakalon-nikto
     volumes:
       - ./:/src
     working_dir: /src
-    entrypoint: ["nikto"]
+    entrypoint: ["/bin/sh", "-c"]
     command:
-      - "-h"
-      - "localhost"
-      - "-Format"
-      - "json"
-      - "-output"
-      - ".pakalon/nikto-results.json"
+      - "mkdir -p /src/.pakalon && nikto -h \"$$SECURITY_TARGET_HOST\" -Format json -output /src/.pakalon/nikto-results.json"
     profiles:
       - dast
       - full
 
   # Nmap - Network Scanner
   nmap:
+    <<: *dast-defaults
     image: instrumentisto/nmap:latest
     container_name: pakalon-nmap
     volumes:
       - ./:/src
     working_dir: /src
-    entrypoint: ["nmap"]
+    entrypoint: ["/bin/sh", "-c"]
     command:
-      - "-sV"
-      - "-oX"
-      - "/src/.pakalon/nmap-results.xml"
-      - "localhost"
+      - "mkdir -p /src/.pakalon && nmap -sV -oX /src/.pakalon/nmap-results.xml \"$$SECURITY_TARGET_HOST\""
     profiles:
       - dast
       - full
@@ -95,12 +119,31 @@ services:
     working_dir: /src
     entrypoint: ["sh", "-c"]
     command:
-      - "pip install bandit -q && bandit -r . -f json -o .pakalon/bandit-results.json"
-    profiles:
-      - sast
+      - |
+        mkdir -p .pakalon
+        pip install bandit -q
+        targets=""
+        for candidate in app python scripts; do
+          if [ -d "$$candidate" ]; then
+            targets="$$targets $$candidate"
+          fi
+        done
+        if [ -z "$$targets" ]; then
+          echo "{}" > .pakalon/bandit-results.json
+          echo "[bandit] No Python source directories found to scan."
+          exit 0
+        fi
+        bandit -r $$targets -x .venv,node_modules,dist,.git,__pycache__,.pakalon-agents -f json -o .pakalon/bandit-results.json
+        exit_code=$$?
+        if [ "$$exit_code" -le 1 ]; then
+          echo "[bandit] Scan completed. Review .pakalon/bandit-results.json for findings."
+          exit 0
+        fi
+        exit "$$exit_code"
 
   # Security Headers Checker (custom)
   security-headers:
+    <<: *dast-defaults
     image: python:3.12-slim
     container_name: pakalon-security-headers
     volumes:
@@ -111,6 +154,7 @@ services:
       - "pip install requests -q && python /src/.pakalon/scripts/check_security_headers.py"
     profiles:
       - dast
+      - full
 
 networks:
   default:

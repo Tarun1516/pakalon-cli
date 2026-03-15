@@ -4,7 +4,7 @@
  * handles choice_request (Q&A) and approval_request (wireframe approval)
  * interactive prompts using ink-select-input.
  */
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Box, Text, useApp, useInput } from "ink";
 import SelectInput from "ink-select-input";
 import Spinner from "@/components/ui/Spinner.js";
@@ -95,9 +95,32 @@ const BuildScreen: React.FC<BuildScreenProps> = ({
 
   const sessionIdRef = useRef<string | null>(null);
   const abortRef = useRef<AbortController>(new AbortController());
+  const lastAddLogRef = useRef(0);
+  const lastStepRef = useRef(0);
 
+  // Throttled log and step setters to reduce re-renders
   const addLog = useCallback((line: string) => {
-    setLogs((prev) => [...prev.slice(-80), line]);
+    const now = Date.now();
+    if (now - lastAddLogRef.current < 50) {
+      // Skip if called too frequently (less than 50ms since last)
+      return;
+    }
+    lastAddLogRef.current = now;
+    setLogs((prev) => {
+      // Only update if the new line is not the same as the last to avoid duplicates
+      const last = prev[prev.length - 1];
+      if (last === line) return prev;
+      return [...prev.slice(-80), line];
+    });
+  }, []);
+
+  const setCurrentStepThrottled = useCallback((step: string) => {
+    const now = Date.now();
+    if (now - lastStepRef.current < 100) {
+      return;
+    }
+    lastStepRef.current = now;
+    setCurrentStep(step);
   }, []);
 
   // Send user response back to bridge for HIL input
@@ -207,7 +230,7 @@ const BuildScreen: React.FC<BuildScreenProps> = ({
           if (evt.content) {
             const line = evt.content.replace(/\n$/, "");
             if (line) addLog(line);
-            setCurrentStep(line.slice(0, 60));
+            setCurrentStepThrottled(line.slice(0, 60));
           }
           break;
 
@@ -285,18 +308,21 @@ const BuildScreen: React.FC<BuildScreenProps> = ({
     }
   });
 
-  // Build SelectInput items from choice / approval request
-  const selectItems = interactiveReq
-    ? [
-        ...(interactiveReq.choices ?? []).map((c) => ({
-          value: c.id,
-          label: c.label,
-        })),
-        ...(interactiveReq.type === "choice_request" && interactiveReq.can_end
-          ? [{ value: "End phase", label: interactiveReq.end_label ?? "⏭  End Q&A and proceed" }]
-          : []),
-      ]
-    : [];
+  // Build SelectInput items from choice / approval request (memoized to avoid resetting selection)
+  const selectItems = useMemo(() => {
+    if (!interactiveReq) return [];
+    const base = (interactiveReq.choices ?? []).map((c) => ({
+      value: c.id,
+      label: c.label,
+    }));
+    if (interactiveReq.type === "choice_request" && interactiveReq.can_end) {
+      base.push({
+        value: "End phase",
+        label: interactiveReq.end_label ?? "⏭  End Q&A and proceed",
+      });
+    }
+    return base;
+  }, [interactiveReq]);
 
   const visibleLogs = logs.slice(-20);
 

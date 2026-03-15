@@ -15,6 +15,7 @@ import ModelsScreen from "@/components/screens/ModelsScreen.js";
 import { useAuth, useSession, useModel, useStreaming, useMode, useStore, useCredits } from "@/store/index.js";
 import { handleStream } from "@/ai/stream.js";
 import { allTools } from "@/ai/tools.js";
+import { runProxyToolLoop } from "@/ai/proxy-tool-runner.js";
 import { loadMcpTools } from "@/mcp/tools.js";
 import { trimToContextWindow, buildSystemWithContext, estimateMessagesTokens, contextEvents, compressContext, loadMemoryFiles, saveMemoryFile, buildSessionMemorySummary } from "@/ai/context.js";
 import { buildCompactSummary, shouldAutoCompact } from "@/ai/compact.js";
@@ -61,8 +62,10 @@ const execAsync = promisify(execCb);
 const BASE_SYSTEM = `You are Pakalon, an expert AI coding assistant running in a terminal.
 - Be concise and precise.
 - When showing code, always use proper fenced code blocks with the language tag.
-- You have access to tools: readFile, writeFile, listDir, bash.
+- You have access to tools: readFile, writeFile, listDir, bash, grepSearch, globFind.
 - Only use tools when explicitly necessary.
+- For shell tasks (bash/grep/cd/Set-Location), execute them via tools instead of writing ad-hoc Python scripts.
+- Do not claim commands or file changes were executed unless a tool call actually performed them.
 - Respect the user's working directory context.`;
 
 interface ChatScreenProps {
@@ -123,7 +126,7 @@ const ChatScreen: React.FC<ChatScreenProps> = ({
 }) => {
   const { exit } = useApp();
   const { token, plan, githubLogin, userId } = useAuth();
-  const { messages, addMessage, finalizeStreamingMessage } = useSession();
+  const { messages, addMessage, finalizeStreamingMessage, updateLastMessage, updateMessageById, appendToMessage } = useSession();
   const { selectedModel, availableModels } = useModel();
   const setSelectedModel = useStore((s) => s.setSelectedModel);
   const modelsError = useStore((s: any) => s.modelsError as string | null);
@@ -267,15 +270,26 @@ const ChatScreen: React.FC<ChatScreenProps> = ({
   const [sandboxMode, setSandboxMode] = useState(false);
   const [automationWizard, setAutomationWizard] = useState<AutomationWizardState | null>(null);
   const [sessionTokensUsed, setSessionTokensUsed] = useState(0);
+  const [proxyToolLoopRunning, setProxyToolLoopRunning] = useState(false);
+  const [lastTurnUsage, setLastTurnUsage] = useState<{ promptTokens: number; completionTokens: number } | null>(null);
   // Budget tracking: cumulative USD spend estimate
   const [sessionSpendUsd, setSessionSpendUsd] = useState(0);
   // T3-13: Session cost tracker (singleton per mount)
   const costTrackerRef = useRef(new SessionCostTracker());
   // T-CLI-52: Ctrl+F stream abort controller
   const abortControllerRef = useRef<AbortController | null>(null);
+  const activeStreamingMessageIdRef = useRef<string | null>(null);
   const budgetExceeded = maxBudgetUsd !== undefined && sessionSpendUsd >= maxBudgetUsd;
   const modelInfo = availableModels.find((m) => m.id === selectedModel);
   const sessionContextLimit = modelInfo?.contextLength ?? 128000;
+  const historyItems = useMemo(
+    () => messages
+      .filter((m) => m.role === "user")
+      .map((m) => typeof m.content === "string" ? m.content : "")
+      .filter(Boolean)
+      .reverse(),
+    [messages],
+  );
   const effectiveModelId = useMemo(() => {
     if (selectedModel && availableModels.some((model) => model.id === selectedModel)) {
       return selectedModel;
@@ -286,6 +300,39 @@ const ChatScreen: React.FC<ChatScreenProps> = ({
   // T-LSP-03: Real-time LSP diagnostics — polled every 5s when task panel open
   interface LspDiag { severity: string; message: string; line?: number; source?: string; filePath: string; }
   const [lspDiagnostics, setLspDiagnostics] = useState<LspDiag[]>([]);
+  const aiBusy = isStreaming || proxyToolLoopRunning;
+
+  const recordTurnUsage = useCallback((usage: { promptTokens: number; completionTokens: number }, text: string) => {
+    setLastTurnUsage(usage);
+
+    if (activeSessionId && selectedModel) {
+      const linesWritten = Math.max(1, (text.match(/\n/g) ?? []).length);
+      const totalUsed = usage.promptTokens + usage.completionTokens;
+      const modelCtxSize = availableModels.find((m) => m.id === selectedModel)?.contextLength ?? 128000;
+      getApiClient().post(`/sessions/${activeSessionId}/usage`, {
+        model_id: selectedModel,
+        tokens_used: totalUsed,
+        context_window_size: modelCtxSize,
+        context_window_used: Math.min(totalUsed, modelCtxSize),
+        lines_written: linesWritten,
+      }).catch(() => { /* non-critical */ });
+
+      costTrackerRef.current.record(selectedModel, usage.promptTokens, usage.completionTokens);
+      const { totalCostUsd } = costTrackerRef.current.summary();
+      setSessionSpendUsd(totalCostUsd);
+    }
+  }, [activeSessionId, availableModels, selectedModel]);
+
+  const persistSessionMessage = useCallback((role: "user" | "assistant" | "system" | "tool", content: string) => {
+    const trimmed = (content ?? "").trim();
+    if (!activeSessionId || !trimmed) return;
+
+    getApiClient()
+      .post(`/sessions/${activeSessionId}/messages`, { role, content: trimmed })
+      .catch(() => {
+        // Non-critical: local chat should continue even if sync fails.
+      });
+  }, [activeSessionId]);
 
   // T-CLI-51: Spawn a background bash task — non-blocking, collects output async
   const spawnBgTask = (cmd: string) => {
@@ -408,12 +455,25 @@ const ChatScreen: React.FC<ChatScreenProps> = ({
           logger.debug(`[ChatScreen] Loaded ${toolCount} MCP tool(s)`);
         }
       })
-      .catch((err) => logger.warn("[ChatScreen] MCP tools load failed", { err: String(err) }));
-  }, [projectDir, mcpServers.join(",")]);
+      .catch((err) => {
+        logger.warn("[ChatScreen] MCP tools load failed", { err: String(err) });
+        addMessage({
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: `⚠️ MCP tools could not be loaded: ${String(err)}`,
+          createdAt: new Date(),
+          isStreaming: false,
+        });
+      });
+  }, [addMessage, projectDir, mcpServers.join(",")]);
 
   useEffect(() => {
-    void runSessionStartHook(projectDir, activeSessionId);
+    void runSessionStartHook(projectDir, activeSessionId ?? undefined);
   }, [projectDir, activeSessionId]);
+
+  useEffect(() => {
+    (globalThis as Record<string, unknown>).PAKALON_PERMISSION_AUTO_ACCEPT = permissionMode === "auto-accept";
+  }, [permissionMode]);
 
   // T-LSP-03: Poll LSP diagnostics every 5 s when the task panel is open.
   // Only active files (recently written) are polled to avoid flooding the LSP.
@@ -629,7 +689,7 @@ const ChatScreen: React.FC<ChatScreenProps> = ({
 
   const handleSubmit = useCallback(
     async (text: string) => {
-      if (isStreaming) return;
+      if (aiBusy) return;
 
       // /pakalon overwrite confirmation — user typed 'yes' after the prompt
       if (pendingOverwriteRef.current) {
@@ -670,7 +730,7 @@ const ChatScreen: React.FC<ChatScreenProps> = ({
     const currentModel = selectedModel;
     if (currentModel && token) {
       try {
-        const apiBase = process.env.PAKALON_API_URL ?? "http://localhost:8000";
+        const apiBase = process.env.PAKALON_API_URL ?? "http://127.0.0.1:8000";
         const contextStatus = await useStore.getState().checkContextStatus(currentModel, apiBase, token);
         if (contextStatus.exhausted) {
           info(
@@ -735,7 +795,7 @@ const ChatScreen: React.FC<ChatScreenProps> = ({
         return;
       }
       try {
-        const hookGate = await runUserPromptSubmitHook(workingText, projectDir, activeSessionId);
+        const hookGate = await runUserPromptSubmitHook(workingText, projectDir, activeSessionId ?? undefined);
         if (hookGate.blocked) {
           info(`⛔ Prompt blocked by hook${hookGate.reason ? `: ${hookGate.reason}` : "."}`);
           return;
@@ -846,7 +906,7 @@ const ChatScreen: React.FC<ChatScreenProps> = ({
             // T-HK-12: Fire PreCompact lifecycle hook — allows hooks to block or annotate compaction
             const preCompactResults = await runHooks(
               "PreCompact",
-              { cwd: projectDir, sessionId: sessionId ?? undefined },
+              { cwd: projectDir, sessionId: activeSessionId ?? undefined },
               projectDir
             );
             const compactBlocked = preCompactResults.some((r) => r.blocked);
@@ -1632,7 +1692,6 @@ const ChatScreen: React.FC<ChatScreenProps> = ({
               info("Usage: `/plan <description>`\n\nGenerates a detailed plan and saves it as `output.md` in the current directory.\nExample: `/plan Build a SaaS dashboard with React + FastAPI`\n\nOnce the plan is written, start building with `/build <task>`.");
               return;
             }
-            useStore.getState().setPermissionMode("plan");
             const planPrompt = `You are a technical planning expert. The user wants to build: "${planDesc}"
 
 Create a detailed project plan and write it to output.md in the current directory (${projectDir ?? process.cwd()}).
@@ -1683,6 +1742,11 @@ After writing the file, summarize the key points here in the chat.`;
               );
             }
 
+            if (useStore.getState().permissionMode === "orchestration") {
+              useStore.getState().setPermissionMode("normal");
+              info("Switched permission mode to **normal** so the build pipeline can execute tools.");
+            }
+
             useStore.getState().launchBridgePipeline({
               userPrompt: effectivePrompt,
               userId: token ?? "anonymous",
@@ -1695,6 +1759,10 @@ After writing the file, summarize the key points here in the chat.`;
           }
 
           case "/web": {
+            if (useStore.getState().permissionMode === "orchestration") {
+              useStore.getState().setPermissionMode("normal");
+              info("Switched permission mode to **normal** so the Pakalon pipeline can execute tools.");
+            }
             const webUrl = args[0]?.trim();
             if (webUrl && (webUrl.startsWith("http://") || webUrl.startsWith("https://"))) {
               info(`🌐 Analyzing **${webUrl}**…`);
@@ -1932,7 +2000,7 @@ After writing the file, summarize the key points here in the chat.`;
             if (!reverted.length) {
               info(`No file changes to revert for checkpoint: _${label}_`);
             } else {
-              const fileList = reverted.map((s) => `  - \`${s.filePath}\``).join("\n");
+              const fileList = reverted.map((s) => `  - \`${(s as { filePath?: string; path?: string }).filePath ?? (s as { filePath?: string; path?: string }).path ?? "unknown"}\``).join("\n");
               info(
                 `↩ **Rewound to checkpoint**: _${label}_\n\n` +
                 `Reverted **${reverted.length}** file change(s):\n${fileList}`
@@ -2511,6 +2579,7 @@ After writing the file, summarize the key points here in the chat.`;
             addMessage(exploreUserMsg);
             const exploreStreamId = crypto.randomUUID();
             addMessage({ id: exploreStreamId, role: "assistant", content: "", createdAt: new Date(), isStreaming: true });
+            activeStreamingMessageIdRef.current = exploreStreamId;
             resetStreaming();
             const exploreMsgs: CoreMessage[] = messages
               .filter((m) => m.role !== "system")
@@ -2533,13 +2602,18 @@ After writing the file, summarize the key points here in the chat.`;
               onThinkChunk: (chunk) => setThinkContent((prev: string) => prev + chunk),
               onTextChunk: (chunk) => {
                 appendStreamChunk(chunk);
-                useStore.getState().appendToLastMessage(chunk);
+                appendToMessage(exploreStreamId, chunk);
               },
-              onFinish: (_t, _u) => { finalizeStreamingMessage(); resetStreaming(); },
-              onError: (err) => {
+              onFinish: (_t, _u) => {
+                activeStreamingMessageIdRef.current = null;
                 finalizeStreamingMessage();
                 resetStreaming();
-                useStore.getState().updateLastMessage({ content: `Explore error: ${err.message}`, isStreaming: false });
+              },
+              onError: (err) => {
+                activeStreamingMessageIdRef.current = null;
+                finalizeStreamingMessage();
+                resetStreaming();
+                updateMessageById(exploreStreamId, { content: `Explore error: ${err.message}`, isStreaming: false });
               },
             });
             return;
@@ -2547,6 +2621,7 @@ After writing the file, summarize the key points here in the chat.`;
 
           case "/hooks": {
             // Already handled above
+            return;
           }
 
           case "/config":
@@ -2667,8 +2742,20 @@ After writing the file, summarize the key points here in the chat.`;
             return;
 
           case "/logout":
-            useStore.getState().logout?.();
-            info("Logged out.");
+            try {
+              const { logout } = await import("@/auth/device-flow.js");
+              const result = await logout();
+              useStore.getState().logout?.();
+              const backendStatus = result.backendLogoutAttempted
+                ? (result.backendLogoutSucceeded ? "backend token revoked" : "backend revocation unavailable")
+                : "no backend token to revoke";
+              info(result.webLogoutAttempted
+                ? `Logged out from the CLI (${backendStatus}) and opened the website sign-out flow: ${result.webLogoutUrl}`
+                : `Logged out from the CLI (${backendStatus}).`);
+            } catch (logoutErr: any) {
+              useStore.getState().logout?.();
+              info(`Logged out from the CLI. Web sign-out could not be started: ${logoutErr.message}`);
+            }
             return;
 
           case "/upgrade":
@@ -2944,12 +3031,13 @@ After writing the file, summarize the key points here in the chat.`;
           // T-CLI-63: /context — token budget visualizer
           case "/context": {
             // T-CLI-63: Token budget grid visualisation — breakdown across categories
-            const used = Math.round((1 - remainingPct / 100) * sessionContextLimit);
-            const remaining = Math.round(remainingPct / 100 * sessionContextLimit);
+            const currentRemainingPct = remainingPct ?? 100;
+            const used = Math.round((1 - currentRemainingPct / 100) * sessionContextLimit);
+            const remaining = Math.round(currentRemainingPct / 100 * sessionContextLimit);
             const barWidth = 40;
-            const filledCells = Math.round((1 - remainingPct / 100) * barWidth);
+            const filledCells = Math.round((1 - currentRemainingPct / 100) * barWidth);
             const bar = "█".repeat(filledCells) + "░".repeat(barWidth - filledCells);
-            const pctColor = remainingPct < 20 ? "🔴" : remainingPct < 50 ? "🟡" : "🟢";
+            const pctColor = currentRemainingPct < 20 ? "🔴" : currentRemainingPct < 50 ? "🟡" : "🟢";
 
             // Breakdown estimates (based on message history heuristics)
             const msgCount = messages.length;
@@ -2969,7 +3057,7 @@ After writing the file, summarize the key points here in the chat.`;
             info([
               "**── Context Window Breakdown ──**",
               "",
-              `  Total:   [${bar}] ${100 - remainingPct}% used / ${remaining.toLocaleString()} remaining`,
+              `  Total:   [${bar}] ${100 - currentRemainingPct}% used / ${remaining.toLocaleString()} remaining ${pctColor}`,
               "",
               "  **Category Breakdown (estimates)**",
               `  ${"System prompt".padEnd(18)} [${_bar(systemTokens)}] ${_pct(systemTokens)} ~${systemTokens.toLocaleString()} tok`,
@@ -2980,13 +3068,13 @@ After writing the file, summarize the key points here in the chat.`;
               "",
               `  ${"Remaining".padEnd(18)} [${_bar(remaining)}] ${_pct(remaining)} ~${remaining.toLocaleString()} tok`,
               "",
-              `  ${pctColor} ${remainingPct}% of ${sessionContextLimit.toLocaleString()}-token window remaining`,
+              `  ${pctColor} ${currentRemainingPct}% of ${sessionContextLimit.toLocaleString()}-token window remaining`,
               "",
-              remainingPct < 10
+              currentRemainingPct < 10
                 ? "  ⛔ Context critically full. Run `/compact` now to avoid truncation."
-                : remainingPct < 20
+                : currentRemainingPct < 20
                 ? "  ⚠️  Context nearly full. Run `/compact` to compress history."
-                : remainingPct < 50
+                : currentRemainingPct < 50
                 ? "  ⚡ Context half used. Consider `/compact` soon for long sessions."
                 : "  ✓  Context healthy — no action needed.",
             ].join("\n"));
@@ -2997,8 +3085,9 @@ After writing the file, summarize the key points here in the chat.`;
           case "/auditor": {
             const isYolo = args.includes("--yolo");
             const maxIterIdx = args.indexOf("--max-iterations");
-            const maxIterations = maxIterIdx !== -1 && args[maxIterIdx + 1]
-              ? parseInt(args[maxIterIdx + 1], 10)
+            const maxIterationsArg = maxIterIdx !== -1 ? args[maxIterIdx + 1] : undefined;
+            const maxIterations = maxIterationsArg
+              ? parseInt(maxIterationsArg, 10)
               : 3;
 
             info(`🔍 **Auditor Agent** starting${isYolo ? " (YOLO mode)" : " (HIL mode)"}...\n\nScanning codebase and comparing with Phase 1 requirements.`);
@@ -3049,19 +3138,25 @@ After writing the file, summarize the key points here in the chat.`;
               const { server, prompt, args: promptArgsStr } = mcpPromptParsed;
               // Merge inline args with the rest of the user input
               const fullArgs = [promptArgsStr, ...args].filter(Boolean).join(" ");
-              addMessage({ role: "user", content: `[MCP Prompt] ${server}::${prompt} ${fullArgs}`.trim() });
+              addMessage({
+                id: crypto.randomUUID(),
+                role: "user",
+                content: `[MCP Prompt] ${server}::${prompt} ${fullArgs}`.trim(),
+                createdAt: new Date(),
+                isStreaming: false,
+              });
               try {
                 const result = await runMcpPrompt(server, prompt, fullArgs || undefined);
                 if (result) {
                   // Inject prompt result as a user turn context so the AI can act on it
                   const promptText = typeof result === "string" ? result : JSON.stringify(result, null, 2);
                   // Submit the interpolated prompt text to the AI
-                  handleSubmit(promptText);
+                  void handleSubmit(promptText);
                 } else {
-                  error(`MCP prompt '${prompt}' from server '${server}' returned no content. Check server is running.`);
+                  info(`MCP prompt '${prompt}' from server '${server}' returned no content. Check server is running.`);
                 }
               } catch (e) {
-                error(`MCP prompt error: ${String(e)}`);
+                info(`MCP prompt error: ${String(e)}`);
               }
               return;
             }
@@ -3350,17 +3445,7 @@ After writing the file, summarize the key points here in the chat.`;
         isStreaming: false,
       };
       addMessage(userMsg);
-
-      const streamingId = crypto.randomUUID();
-      addMessage({
-        id: streamingId,
-        role: "assistant",
-        content: "",
-        createdAt: new Date(),
-        isStreaming: true,
-      });
-
-      resetStreaming();
+      persistSessionMessage("user", finalText);
 
       // Build CoreMessage array for AI
       const coreMessages: CoreMessage[] = [
@@ -3381,8 +3466,11 @@ After writing the file, summarize the key points here in the chat.`;
         finalizeStreamingMessage();
         resetStreaming();
         const modelDisplay = modelInfo?.name ?? selectedModel ?? "Current model";
-        useStore.getState().updateLastMessage({
+        addMessage({
+          id: crypto.randomUUID(),
+          role: "assistant",
           content: `${modelDisplay} Models context windows is used completely, switch to another model to use the application\n\n_Use \`/models\` to switch models or \`/compact\` to reduce context._`,
+          createdAt: new Date(),
           isStreaming: false,
         });
         return;
@@ -3406,7 +3494,7 @@ After writing the file, summarize the key points here in the chat.`;
         ? "\n\n**Response style: LEARNING** — Explain your reasoning step-by-step. Include definitions and analogies."
         : ""; // explanatory is default — no special instruction needed
       const modeBehaviorGuide = permissionMode === "plan"
-        ? "\n\n**Interaction mode: PLAN** — focus on planning, sequencing, and architecture. Avoid autonomous tool-driven changes."
+		? "\n\n**Interaction mode: PLAN** — planning-first. Read/inspect freely, but mutating tools may be blocked by policy."
         : permissionMode === "auto-accept"
         ? "\n\n**Interaction mode: AUTO ACCEPT** — you may edit files and run commands autonomously when needed."
         : permissionMode === "orchestration"
@@ -3415,7 +3503,17 @@ After writing the file, summarize the key points here in the chat.`;
       const system = buildSystemWithContext(effectiveBase + dirNote + memoryBlock + outputStyleGuide + modeBehaviorGuide, []);
 
       // Merge built-in agent tools with dynamically loaded MCP tools
-      let mergedTools: ToolSet = { ...allTools, ...mcpToolsRef.current };
+      const mergedToolsRaw = { ...allTools, ...mcpToolsRef.current };
+      let mergedTools: ToolSet = Object.fromEntries(
+        Object.entries(mergedToolsRaw).filter(([, def]) => typeof (def as { execute?: unknown })?.execute === "function"),
+      ) as ToolSet;
+      const droppedTools = Object.keys(mergedToolsRaw).length - Object.keys(mergedTools).length;
+      if (droppedTools > 0) {
+        logger.warn("[ChatScreen] Ignoring tools without executable handlers", {
+          droppedTools,
+          totalTools: Object.keys(mergedToolsRaw).length,
+        });
+      }
       // Epic B: filter to allowed tools if --allowedTools was specified
       if (allowedTools) {
         const allowed = new Set(allowedTools.split(",").map((t) => t.trim()).filter(Boolean));
@@ -3461,6 +3559,85 @@ After writing the file, summarize the key points here in the chat.`;
       const localKey = process.env.OPENROUTER_API_KEY;
       const useProxy = !localKey || process.env.PAKALON_USE_PROXY === "1";
 
+      const toolEnabledAssistantLoop = permissionMode !== "orchestration" && Object.keys(mergedTools).length > 0;
+
+      if (toolEnabledAssistantLoop) {
+        setProxyToolLoopRunning(true);
+        try {
+          const toolSummary = (toolName: string, value: unknown) => {
+            const textValue = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+            return textValue.length > 1200 ? `${textValue.slice(0, 1200)}\n...[truncated]` : textValue;
+          };
+
+          const result = await runProxyToolLoop({
+            model: effectiveModelId ?? defaultModel ?? fallbackModel ?? DEFAULT_FREE_MODEL_ID,
+            messages: trimmed,
+            apiKey: localKey || undefined,
+            useProxy,
+            authToken: token ?? undefined,
+            privacyMode,
+            thinkingEnabled,
+            projectDir: projectDir ?? process.cwd(),
+            system,
+            tools: mergedTools,
+            onToolCall: (toolName, input, note) => {
+              addMessage({
+                id: crypto.randomUUID(),
+                role: "tool",
+                content: `${note ? `${note}\n` : ""}${toolName} ${JSON.stringify(input)}`,
+                createdAt: new Date(),
+                isStreaming: false,
+              });
+            },
+            onToolResult: (toolName, value) => {
+              addMessage({
+                id: crypto.randomUUID(),
+                role: "tool",
+                content: `${toolName} result\n${toolSummary(toolName, value)}`,
+                createdAt: new Date(),
+                isStreaming: false,
+              });
+            },
+          });
+
+          addMessage({
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: result.finalText,
+            createdAt: new Date(),
+            isStreaming: false,
+          });
+          persistSessionMessage("assistant", result.finalText);
+          logger.debug("Chat tool loop done", result);
+          recordTurnUsage({ promptTokens: result.promptTokens, completionTokens: result.completionTokens }, result.finalText);
+        } catch (err) {
+          const errorText = `Error: ${err instanceof Error ? err.message : String(err)}`;
+          addMessage({
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: errorText,
+            createdAt: new Date(),
+            isStreaming: false,
+          });
+          persistSessionMessage("assistant", errorText);
+        } finally {
+          setProxyToolLoopRunning(false);
+        }
+        return;
+      }
+
+      const streamingId = crypto.randomUUID();
+      addMessage({
+        id: streamingId,
+        role: "assistant",
+        content: "",
+        createdAt: new Date(),
+        isStreaming: true,
+      });
+      activeStreamingMessageIdRef.current = streamingId;
+
+      resetStreaming();
+
       await handleStream({
         model: effectiveModelId ?? defaultModel ?? fallbackModel ?? DEFAULT_FREE_MODEL_ID,
         messages: trimmed,
@@ -3468,6 +3645,7 @@ After writing the file, summarize the key points here in the chat.`;
         authToken: useProxy ? (token ?? undefined) : undefined,
         useProxy,
         system,
+        privacyMode,
         thinkingEnabled,
         promptCaching: true,
         tools: Object.keys(mergedTools).length > 0 ? mergedTools : undefined,
@@ -3476,11 +3654,14 @@ After writing the file, summarize the key points here in the chat.`;
         },
         onTextChunk: (chunk) => {
           appendStreamChunk(chunk);
-          useStore.getState().appendToLastMessage(chunk);
+          appendToMessage(streamingId, chunk);
         },
         onFinish: (_text, usage) => {
+          activeStreamingMessageIdRef.current = null;
           finalizeStreamingMessage();
           resetStreaming();
+          persistSessionMessage("assistant", _text);
+          setLastTurnUsage(usage);
           logger.debug("Chat turn done", usage);
           // T-HK-01: Fire Stop hook after each AI turn finishes
           runStopHook(projectDir ?? undefined, activeSessionId ?? undefined).catch(() => {});
@@ -3502,22 +3683,7 @@ After writing the file, summarize the key points here in the chat.`;
             }, projectDir ?? undefined).catch(() => {});
           }
           // Record usage to backend (lines_written = newlines in response ~ lines of output)
-          if (activeSessionId && selectedModel) {
-            const linesWritten = Math.max(1, (_text.match(/\n/g) ?? []).length);
-            const totalUsed = usage.promptTokens + usage.completionTokens;
-            const modelCtxSize = availableModels.find((m) => m.id === selectedModel)?.contextLength ?? 128000;
-            getApiClient().post(`/sessions/${activeSessionId}/usage`, {
-              model_id: selectedModel,
-              tokens_used: totalUsed,
-              context_window_size: modelCtxSize,
-              context_window_used: Math.min(totalUsed, modelCtxSize),
-              lines_written: linesWritten,
-            }).catch(() => { /* non-critical */ });
-            // T3-13: Per-model cost estimate via SessionCostTracker
-            costTrackerRef.current.record(selectedModel, usage.promptTokens, usage.completionTokens);
-            const { totalCostUsd } = costTrackerRef.current.summary();
-            setSessionSpendUsd(totalCostUsd);
-          }
+          recordTurnUsage(usage, _text);
 
           // P1: Auto context compaction — fire async after turn ends
           if (autoCompact) {
@@ -3578,16 +3744,17 @@ After writing the file, summarize the key points here in the chat.`;
           }
         },
         onError: (err) => {
+          activeStreamingMessageIdRef.current = null;
           finalizeStreamingMessage();
           resetStreaming();
-          useStore.getState().updateLastMessage({
+          updateMessageById(streamingId, {
             content: `Error: ${err.message}`,
             isStreaming: false,
           });
         },
       });
     },
-    [isStreaming, budgetExceeded, sessionSpendUsd, maxBudgetUsd, token, selectedModel, availableModels, messages, addMessage, finalizeStreamingMessage, appendStreamChunk, setThinkContent, resetStreaming]
+    [aiBusy, budgetExceeded, sessionSpendUsd, maxBudgetUsd, token, selectedModel, availableModels, messages, addMessage, finalizeStreamingMessage, appendStreamChunk, setThinkContent, resetStreaming, permissionMode, privacyMode, projectDir, defaultModel, fallbackModel, recordTurnUsage, thinkingEnabled, updateMessageById, appendToMessage, persistSessionMessage]
   );
 
   // Send initial message from CLI arg
@@ -3628,7 +3795,7 @@ After writing the file, summarize the key points here in the chat.`;
   // Connect to WebSocket for real-time context usage
   useEffect(() => {
     if (!token) return;
-    const wsUrl = (process.env.PAKALON_API_URL ?? "http://localhost:8000").replace(/^http/, "ws") + `/usage/stream?token=${token}`;
+    const wsUrl = (process.env.PAKALON_API_URL ?? "http://127.0.0.1:8000").replace(/^http/, "ws") + `/usage/stream?token=${token}`;
     const ws = new WebSocket(wsUrl);
     
     ws.onmessage = (event) => {
@@ -3666,11 +3833,18 @@ After writing the file, summarize the key points here in the chat.`;
     }
     // T-CLI-52: Ctrl+F — kill / abort current AI stream
     if (key.ctrl && _input === "f") {
-      if (isStreaming) {
+      if (aiBusy) {
         abortControllerRef.current?.abort();
         finalizeStreamingMessage();
         resetStreaming();
-        useStore.getState().updateLastMessage({ content: "_(stream cancelled by Ctrl+F)_", isStreaming: false });
+        setProxyToolLoopRunning(false);
+        const activeMessageId = activeStreamingMessageIdRef.current;
+        if (activeMessageId) {
+          updateMessageById(activeMessageId, { content: "_(stream cancelled by Ctrl+F)_", isStreaming: false });
+          activeStreamingMessageIdRef.current = null;
+        } else {
+          updateLastMessage({ content: "_(stream cancelled by Ctrl+F)_", isStreaming: false });
+        }
       }
     }
     // T-CLI-51: Ctrl+B — toggle background bash input overlay
@@ -3698,11 +3872,14 @@ After writing the file, summarize the key points here in the chat.`;
         const allMessages = useStore.getState().messages;
         let targetFile: string | null = null;
         for (let i = allMessages.length - 1; i >= 0; i--) {
-          const content = typeof allMessages[i].content === "string" ? allMessages[i].content : "";
+          const message = allMessages[i];
+          if (!message) continue;
+          const content = typeof message.content === "string" ? message.content : "";
           // Match absolute paths or common relative paths mentioned in messages
           const match = content.match(/(?:^|\s|[`'"])((?:\/|\.\/|\.\.\/|[A-Za-z]:\\)[^\s`'"<>|*?]+\.[a-zA-Z0-9]+)/m);
-          if (match) {
-            targetFile = match[1].trim();
+          const matchedPath = match?.[1];
+          if (matchedPath) {
+            targetFile = matchedPath.trim();
             break;
           }
         }
@@ -3772,7 +3949,7 @@ After writing the file, summarize the key points here in the chat.`;
         </Box>
       )}
       <Box flexGrow={1} flexDirection="column" overflow="hidden">
-        <MessageList messages={messages} />
+        <MessageList messages={messages} assistantBusy={aiBusy} />
       </Box>
       {verbose && thinkContent ? (
         <Box borderStyle="single" borderColor="gray" paddingX={1} flexDirection="column">
@@ -3926,19 +4103,20 @@ After writing the file, summarize the key points here in the chat.`;
       })()}
       <InputBar
         onSubmit={handleSubmit}
-        isDisabled={isStreaming}
+        isDisabled={aiBusy}
         vimMode={vimMode}
         projectDir={projectDir ?? undefined}
-        historyItems={messages.filter((m) => m.role === "user").map((m) => typeof m.content === "string" ? m.content : "").filter(Boolean).reverse()}
+        historyItems={historyItems}
       />
       {showStatusline && (
         <StatusLine
           modelId={selectedModel ?? undefined}
           defaultModel={defaultModel ?? undefined}
-          isStreaming={isStreaming}
+          isStreaming={aiBusy}
           messageCount={messages.length}
           estimatedTokens={sessionTokensUsed}
           contextLimit={sessionContextLimit}
+          lastTurnUsage={lastTurnUsage ?? undefined}
           privacyMode={privacyMode}
           plan={plan ?? undefined}
           projectDir={projectDir}

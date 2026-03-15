@@ -12,8 +12,10 @@ import { getMachineIds } from "@/auth/machine-id.js";
 import {
   saveCredentials,
   clearCredentials,
+  loadCredentials,
   StoredCredentials,
 } from "@/auth/storage.js";
+import { execFile } from "child_process";
 
 export interface DeviceCodeResult {
   deviceId: string;
@@ -57,6 +59,21 @@ function isLocalOrigin(url: string): boolean {
   } catch {
     return false;
   }
+}
+
+function openUrlInBrowser(url: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const done = (error: Error | null) => error ? reject(error) : resolve();
+    if (process.platform === "win32") {
+      execFile("cmd", ["/c", "start", "", url], (error) => done(error));
+      return;
+    }
+    if (process.platform === "darwin") {
+      execFile("open", [url], (error) => done(error));
+      return;
+    }
+    execFile("xdg-open", [url], (error) => done(error));
+  });
 }
 
 async function isReachableWebOrigin(origin: string, deviceId: string): Promise<boolean> {
@@ -254,6 +271,53 @@ export async function runDeviceAuth(
 /**
  * Logout — clear stored credentials.
  */
-export function logout(): void {
+export async function logout(): Promise<{
+  backendLogoutAttempted: boolean;
+  backendLogoutSucceeded: boolean;
+  webLogoutAttempted: boolean;
+  webLogoutUrl: string;
+}> {
+  const creds = loadCredentials();
+  let backendLogoutAttempted = false;
+  let backendLogoutSucceeded = false;
+
+  if (creds?.token) {
+    backendLogoutAttempted = true;
+    try {
+      const client = createApiClient();
+      await client.post(
+        "/auth/logout",
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${creds.token}`,
+          },
+          timeout: 5000,
+        }
+      );
+      backendLogoutSucceeded = true;
+    } catch {
+      backendLogoutSucceeded = false;
+    }
+  }
+
   clearCredentials();
+
+  const webLogoutUrl = `${stripTrailingSlash(process.env.PAKALON_WEB_URL ?? DEFAULT_WEB_BASE_URL)}/logout?source=cli`;
+  try {
+    await openUrlInBrowser(webLogoutUrl);
+    return {
+      backendLogoutAttempted,
+      backendLogoutSucceeded,
+      webLogoutAttempted: true,
+      webLogoutUrl,
+    };
+  } catch {
+    return {
+      backendLogoutAttempted,
+      backendLogoutSucceeded,
+      webLogoutAttempted: false,
+      webLogoutUrl,
+    };
+  }
 }

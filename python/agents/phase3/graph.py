@@ -24,6 +24,7 @@ except ImportError:
 from .execution_log import ExecutionLog
 from ..shared.paths import get_phase_dir, get_test_evidence_dir
 from ..shared.decision_registry import record_decision
+from ..shared.penpot_metadata import read_penpot_metadata, sync_penpot_artifacts
 from ..skills import load_skill, get_frontend_skills
 from .auditor import run_auditor as run_auditor_node
 
@@ -331,19 +332,10 @@ async def penpot_sync(state: Phase3State) -> Phase3State:
     project_dir = pathlib.Path(state.get("project_dir", "."))
     phase2_dir = get_phase_dir(project_dir, 2, create=False)
 
-    penpot_file_id: str | None = None
-    penpot_project_url: str | None = state.get("penpot_project_url")
-
-    # Try to load penpot_file_id from the Phase 2 manifest
+    penpot_state = read_penpot_metadata(project_dir) or {}
+    penpot_file_id: str | None = penpot_state.get("file_id")
+    penpot_project_url: str | None = state.get("penpot_project_url") or penpot_state.get("project_url") or penpot_state.get("file_url")
     manifest_path = phase2_dir / "phase-2-manifest.json"
-    if manifest_path.exists():
-        try:
-            _manifest = json.loads(manifest_path.read_text())
-            penpot_file_id = _manifest.get("penpot_file_id")
-            if not penpot_project_url:
-                penpot_project_url = _manifest.get("penpot_project_url") or _manifest.get("penpot_file_url")
-        except Exception:
-            pass
 
     if not penpot_file_id:
         sse({"type": "text_delta", "content": "🖌  Penpot sync: no Phase 2 file ID — skipping.\n"})
@@ -374,12 +366,7 @@ async def penpot_sync(state: Phase3State) -> Phase3State:
             return state
 
         current_revn: int | None = meta.get("revn")
-        stored_revn: int | None = None
-        if manifest_path.exists():
-            try:
-                stored_revn = json.loads(manifest_path.read_text()).get("penpot_revn")
-            except Exception:
-                pass
+        stored_revn: int | None = penpot_state.get("revision")
 
         if current_revn is not None and stored_revn is not None and current_revn == stored_revn:
             sse({"type": "text_delta", "content": "  ✅ Penpot design unchanged since Phase 2.\n"})
@@ -392,6 +379,26 @@ async def penpot_sync(state: Phase3State) -> Phase3State:
             state["wireframe_svg"] = updated_svg
             # Persist updated SVG to phase-2 directory so SA1 can read it
             (phase2_dir / "wireframe-final.svg").write_text(updated_svg)
+            try:
+                _generated_json = phase2_dir / "Wireframe_generated.json"
+                sync_penpot_artifacts(
+                    str(project_dir),
+                    {
+                        "file_id": penpot_file_id,
+                        "project_id": getattr(tool, "last_project_id", None) or penpot_state.get("project_id"),
+                        "project_url": penpot_project_url,
+                        "file_url": getattr(tool, "last_file_url", None) or penpot_state.get("file_url"),
+                        "revision": current_revn,
+                        "base_url": getattr(tool, "_base", os.environ.get("PENPOT_HOST") or "http://localhost:3449"),
+                        "phase": 3,
+                        "status": "synced-for-phase-3",
+                        "source": "phase3.penpot_sync",
+                        "local_svg_path": str((phase2_dir / "wireframe-final.svg").resolve()),
+                        "local_json_path": str(_generated_json.resolve()) if _generated_json.exists() else None,
+                    },
+                )
+            except Exception:
+                pass
             sse({
                 "type": "design_updated",
                 "message": f"Penpot revision {current_revn}: wireframe updated for Phase 3.",
@@ -1585,11 +1592,8 @@ async def run_phase3(
     _penpot_url = penpot_project_url
     if not _penpot_url:
         try:
-            import json as _json
-            _manifest_path = pathlib.Path(project_dir) / ".pakalon-agents" / "ai-agents" / "phase-2" / "url-manifest.json"
-            if _manifest_path.exists():
-                _manifest = _json.loads(_manifest_path.read_text())
-                _penpot_url = _manifest.get("penpot_project_url") or _manifest.get("penpot_file_url")
+            _penpot_state = read_penpot_metadata(project_dir) or {}
+            _penpot_url = _penpot_state.get("project_url") or _penpot_state.get("file_url")
         except Exception:
             pass
 

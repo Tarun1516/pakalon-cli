@@ -54,7 +54,7 @@ pakalon doctor    # Check system requirements
 
 ---
 
-## Commands Reference
+## Commands Reference ❤️
 
 ### Top-level commands
 
@@ -144,6 +144,14 @@ pakalon /pakalon "build a SaaS dashboard with Next.js and PostgreSQL"
 HIL mode pauses before each phase for your approval.  
 YOLO mode (`--permission-mode yolo`) proceeds automatically through all phases.
 
+Pakalon's autonomous executor follows a **PAUL-inspired loop** for each task:
+
+- **Plan** — inspect the repo, gather context, and choose the smallest next action
+- **Apply** — perform the change with actual tools instead of just describing commands
+- **Unify** — validate the result and summarize what was completed
+
+When language servers are available, the agent can also use **LSP-backed methods** such as definition lookup, references, hover, completion, rename, diagnostics, and workspace symbol search to inspect and validate code changes.
+
 ---
 
 ## Keyboard Shortcuts (Chat TUI)
@@ -228,4 +236,5 @@ bun run type-check   # TypeScript checks
 ## License
 
 MIT © Pakalon
-# pakalon-cli
+# pakalon-cli 🌍
+❤️

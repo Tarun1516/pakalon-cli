@@ -170,6 +170,7 @@ const COMMAND_SUGGESTIONS: CommandSuggestion[] = [
   { label: "/penpot", insertValue: "/penpot", description: "Open the Penpot design workflow" },
   { label: "/agent", insertValue: "/agent", description: "Switch to agent mode" },
   { label: "/automations", insertValue: "/automations", description: "Manage automations and connectors" },
+  { label: "/logout", insertValue: "/logout", description: "Log out from CLI and web" },
 ];
 
 // T-MCP-08: Append MCP prompt commands (e.g. "/mcp__context7__") dynamically at runtime.
@@ -203,10 +204,26 @@ interface RichSelectItem {
   agentColor?: string;
 }
 
+function sameRichItems(a: RichSelectItem[], b: RichSelectItem[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  return a.every((item, index) => {
+    const other = b[index];
+    return !!other
+      && item.label === other.label
+      && item.value === other.value
+      && item.description === other.description
+      && item.agentColor === other.agentColor;
+  });
+}
+
 const PAKALON_ACCENT_COLOR = PAKALON_GOLD; // golden accent from design
 
 const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode, projectDir, historyItems }) => {
   const [value, setValue] = useState("");
+  const valueRef = useRef("");
+  const historyCursorRef = useRef(-1);
+  const historyDraftRef = useRef("");
   const [atItems, setAtItems] = useState<RichSelectItem[]>([]);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
   // T-CLI-80: Vim mode state — "normal" waits for commands, "insert" allows typing
@@ -214,6 +231,9 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode
   const [cursorPos, setCursorPos] = useState(0);
   // dd pending state (kept for compat; superseded by pendingMotionRef)
   const pendingDRef = useRef(false);
+  const suppressNextSubmitRef = useRef(false);
+  const suppressSuggestionsRef = useRef(false);
+  const pendingSlashSubmitRef = useRef<string | null>(null);
   // T-CLI-80: Extended vim state
   const undoStackRef = useRef<string[]>([]);   // undo history (max 50)
   const yankRef = useRef<string>("");           // yank/delete register
@@ -221,6 +241,7 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode
   const visualAnchorRef = useRef<number>(0);   // visual mode selection anchor
 
   const slashItems = React.useMemo(() => {
+    if (suppressSuggestionsRef.current) return [] as CommandSuggestion[];
     if (!value.startsWith("/")) return [] as CommandSuggestion[];
     const query = value.slice(1).trim().toLowerCase();
     const commandItems = COMMAND_SUGGESTIONS.filter((item) => item.label.startsWith("/"));
@@ -257,16 +278,75 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode
     const match = historyItems.find((h) => h.toLowerCase().startsWith(lv) && h.length > value.length);
     return match ? match.slice(value.length) : "";
   }, [value, historyItems, slashItems]);
+  const promptHistory = React.useMemo(
+    () => (historyItems ?? []).map((item) => item.trim()).filter(Boolean),
+    [historyItems],
+  );
+
+  const resetHistoryNavigation = React.useCallback(() => {
+    historyCursorRef.current = -1;
+    historyDraftRef.current = "";
+  }, []);
+
+  const navigatePromptHistory = React.useCallback((direction: "up" | "down") => {
+    if (promptHistory.length === 0) return;
+
+    if (direction === "up") {
+      if (historyCursorRef.current === -1) {
+        historyDraftRef.current = valueRef.current;
+      }
+      const nextCursor = Math.min(historyCursorRef.current + 1, promptHistory.length - 1);
+      const nextValue = promptHistory[nextCursor] ?? "";
+      historyCursorRef.current = nextCursor;
+      pendingSlashSubmitRef.current = null;
+      suppressSuggestionsRef.current = true;
+      setAtItems([]);
+      setValue(nextValue);
+      setCursorPos(nextValue.length);
+      return;
+    }
+
+    if (historyCursorRef.current === -1) return;
+
+    const nextCursor = historyCursorRef.current - 1;
+    historyCursorRef.current = nextCursor;
+    pendingSlashSubmitRef.current = null;
+    suppressSuggestionsRef.current = true;
+    setAtItems([]);
+
+    if (nextCursor === -1) {
+      const restoredValue = historyDraftRef.current;
+      setValue(restoredValue);
+      setCursorPos(restoredValue.length);
+      return;
+    }
+
+    const nextValue = promptHistory[nextCursor] ?? "";
+    setValue(nextValue);
+    setCursorPos(nextValue.length);
+  }, [promptHistory]);
   const permissionMode = useStore((s) => s.permissionMode);
   const cyclePermissionMode = useStore((s) => s.cyclePermissionMode);
   const toggleVerbose = useStore((s) => s.toggleVerbose);
 
   useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
+
+  useEffect(() => {
     setSelectedSuggestionIndex(0);
   }, [value, atItems, slashItems]);
 
+  useEffect(() => {
+    if (pendingSlashSubmitRef.current && value.trim() !== pendingSlashSubmitRef.current) {
+      pendingSlashSubmitRef.current = null;
+    }
+  }, [value]);
+
   const applySuggestion = (item: RichSelectItem) => {
+    resetHistoryNavigation();
     if (atItems.length > 0) {
+      pendingSlashSubmitRef.current = null;
       handleAtSelect(item);
       return;
     }
@@ -275,14 +355,15 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode
   };
 
   const submitCurrentValue = React.useCallback((nextValue?: string) => {
-    const finalValue = (nextValue ?? value).trim();
+    const finalValue = (nextValue ?? valueRef.current).trim();
     if (!finalValue || isDisabled) return;
     setAtItems([]);
+    resetHistoryNavigation();
     onSubmit(finalValue);
     setValue("");
     setCursorPos(0);
     if (vimMode) setVimEditMode("normal");
-  }, [isDisabled, onSubmit, value, vimMode]);
+  }, [isDisabled, onSubmit, resetHistoryNavigation, vimMode]);
 
   // Sync cursorPos with value length when value changes externally
   useEffect(() => {
@@ -303,6 +384,10 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode
   // T-CLI-09: also show file completions when fragment looks like a path
   // T-MCP-07: also show MCP @server:resource completions
   useEffect(() => {
+    if (suppressSuggestionsRef.current) {
+      if (atItems.length) setAtItems([]);
+      return;
+    }
     const lastAtIdx = value.lastIndexOf("@");
     if (lastAtIdx === -1) {
       if (atItems.length) setAtItems([]);
@@ -336,7 +421,7 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode
           description: r.description,
           agentColor: "magenta" as string,
         }));
-      setAtItems(resourceItems);
+      setAtItems((prev) => sameRichItems(prev, resourceItems) ? prev : resourceItems);
       // Eagerly warm the cache for next time
       void ensureMcpResourceCache();
       return;
@@ -357,10 +442,11 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode
         agentColor: s.color,
       }));
 
-    // T-CLI-09: File suggestions — only when query is non-empty or looks like a path fragment
+    // T-CLI-09: File suggestions — only for path-like fragments to avoid heavy scans while typing fast.
     const cwd = projectDir ?? process.cwd();
-    const files = getFileSuggestions(cwd);
-    const fileItems = query.length > 0
+    const shouldSuggestFiles = query.length >= 2 && /[./\\~-]/.test(query);
+    const files = shouldSuggestFiles ? getFileSuggestions(cwd) : [];
+    const fileItems = shouldSuggestFiles
       ? files
           .filter((f) => f.toLowerCase().includes(query.toLowerCase()))
           .slice(0, 6)
@@ -388,7 +474,7 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode
       }));
 
     const combined = [...agentItems, ...fileItems, ...mcpServers].slice(0, 10);
-    setAtItems(combined);
+    setAtItems((prev) => sameRichItems(prev, combined) ? prev : combined);
   }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Shift+Tab → cycle permission mode; T164: Ctrl+O → verbose
@@ -406,17 +492,41 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode
           return;
         }
         if (_input === " ") {
-          applySuggestion(visibleSuggestions[selectedSuggestionIndex]!);
+          const selectedSuggestion = visibleSuggestions[selectedSuggestionIndex]!;
+          applySuggestion(selectedSuggestion);
+          pendingSlashSubmitRef.current = atItems.length > 0 ? null : selectedSuggestion.value.trim();
           return;
         }
         if (key.return) {
           const selectedSuggestion = visibleSuggestions[selectedSuggestionIndex]!;
           if (atItems.length > 0) {
+            suppressNextSubmitRef.current = true;
+            pendingSlashSubmitRef.current = null;
             applySuggestion(selectedSuggestion);
             return;
           }
 
-          submitCurrentValue(selectedSuggestion.value);
+          const currentValue = valueRef.current;
+          if (pendingSlashSubmitRef.current && currentValue.trim() === pendingSlashSubmitRef.current) {
+            pendingSlashSubmitRef.current = null;
+            submitCurrentValue(currentValue);
+            return;
+          }
+
+          suppressNextSubmitRef.current = true;
+          applySuggestion(selectedSuggestion);
+          pendingSlashSubmitRef.current = selectedSuggestion.value.trim();
+          return;
+        }
+      }
+
+      if ((!vimMode || vimEditMode === "insert") && atItems.length === 0 && slashItems.length === 0) {
+        if (key.upArrow) {
+          navigatePromptHistory("up");
+          return;
+        }
+        if (key.downArrow) {
+          navigatePromptHistory("down");
           return;
         }
       }
@@ -480,6 +590,16 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode
           if (end === -1) return null;
           return around ? [start, end] : [start + 1, end - 1];
         };
+
+        // Up/down arrows for history navigation (even in normal mode)
+        if (key.upArrow) {
+          navigatePromptHistory("up");
+          return;
+        }
+        if (key.downArrow) {
+          navigatePromptHistory("down");
+          return;
+        }
 
         // --- resolve pending multi-key sequence ---
         const pending = pendingMotionRef.current;
@@ -663,7 +783,7 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode
       }
       // T-CLI-57: Right arrow / End accepts ghost text suggestion
       if ((key.rightArrow || key.end) && ghostSuggestion && atItems.length === 0) {
-        setValue(value + ghostSuggestion);
+        setValue((prev) => prev + ghostSuggestion);
         return;
       }
     },
@@ -671,18 +791,26 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode
   );
 
   const handleVimSubmit = () => {
+    pendingSlashSubmitRef.current = null;
     submitCurrentValue();
   };
 
   const handleSubmit = (val: string) => {
+    if (suppressNextSubmitRef.current) {
+      suppressNextSubmitRef.current = false;
+      return;
+    }
+    pendingSlashSubmitRef.current = null;
     submitCurrentValue(val);
   };
 
   const handleAtSelect = (item: { label: string; value: string }) => {
     // Replace only the @fragment (from the last @ to end) with selected agent name + space
-    const lastAtIdx = value.lastIndexOf("@");
+    const currentValue = valueRef.current;
+    resetHistoryNavigation();
+    const lastAtIdx = currentValue.lastIndexOf("@");
     if (lastAtIdx !== -1) {
-      const before = value.slice(0, lastAtIdx);
+      const before = currentValue.slice(0, lastAtIdx);
       setValue(`${before}${item.value} `);
     } else {
       setValue(`${item.value} `);
@@ -736,7 +864,7 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode
       {atItems.length > 0 && (
         <Box width="100%" justifyContent="center">
           <Box flexDirection="column" borderStyle="single" borderColor={PAKALON_ACCENT_COLOR} paddingX={1} width={shellWidth}>
-            <Text dimColor>Suggestions — ↑/↓ move, Space selects, Enter confirms</Text>
+            <Text dimColor>Suggestions — ↑/↓ move, Space selects, Enter selects (press Enter again to send)</Text>
             {atItems.map((item, index) => (
               <Box key={item.value} gap={1}>
                 <Text color={index === selectedSuggestionIndex ? PAKALON_ACCENT_COLOR : (item.agentColor ?? "cyan")} bold={index === selectedSuggestionIndex}>
@@ -753,7 +881,7 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode
       {slashItems.length > 0 && (
         <Box width="100%" justifyContent="center">
           <Box flexDirection="column" borderStyle="single" borderColor={PAKALON_ACCENT_COLOR} paddingX={1} width={shellWidth}>
-            <Text dimColor>Commands — ↑/↓ move, Space selects, Enter confirms</Text>
+            <Text dimColor>Commands — ↑/↓ move, Space selects, Enter selects (press Enter again to send)</Text>
             {slashItems.slice(0, 10).map((item, index) => (
               <Box key={item.label} gap={1}>
                 <Text color={index === selectedSuggestionIndex ? PAKALON_ACCENT_COLOR : "white"} bold={index === selectedSuggestionIndex}>
@@ -780,20 +908,27 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, isDisabled, mode, vimMode
             ) : (
               <TextInput
                 value={value}
-                onChange={setValue}
+                onChange={(nextValue) => {
+                  suppressSuggestionsRef.current = false;
+                  resetHistoryNavigation();
+                  setValue(nextValue);
+                }}
                 onSubmit={handleSubmit}
                 placeholder="Enter your message here"
               />
             )}
           </Box>
           {/* T-CLI-57: Ghost text suggestion — shown as dimmed suffix (End accepts) */}
-          {ghostSuggestion && !isDisabled && atItems.length === 0 && (
-            <Box paddingX={1}>
-              <Text color={TEXT_SECONDARY}>
-                {value}
-                <Text color={PAKALON_GOLD}>{ghostSuggestion}</Text>
-                <Text color={TEXT_SECONDARY}>  End accepts</Text>
-              </Text>
+          {!isDisabled && atItems.length === 0 && (
+            <Box paddingX={1} minHeight={1}>
+              {ghostSuggestion ? (
+                <Text color={TEXT_SECONDARY}>
+                  <Text color={PAKALON_GOLD}>{ghostSuggestion}</Text>
+                  <Text color={TEXT_SECONDARY}>  End accepts</Text>
+                </Text>
+              ) : (
+                <Text color={TEXT_SECONDARY}> </Text>
+              )}
             </Box>
           )}
           <Text color={PAKALON_GOLD}>{horizontalRule}</Text>

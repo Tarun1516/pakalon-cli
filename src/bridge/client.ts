@@ -2,8 +2,9 @@
  * Python bridge client — HTTP client for the local bridge server.
  */
 import axios from "axios";
-import type { BridgeRequest, BridgeResponse, AgentRunPayload, AgentRunResult, MemorySearchPayload, MemorySearchResult, PhaseSSEEvent, PipelineStartRequest, BridgeError as _BridgeError } from "./types.js";
+import type { BridgeRequest, BridgeResponse, AgentRunPayload, AgentRunResult, MemorySearchPayload, MemorySearchResult, PhaseSSEEvent, PipelineStartRequest, PenpotProjectStateResponse, BridgeError as _BridgeError } from "./types.js";
 import { BRIDGE_BASE_URL, BridgeError } from "./types.js";
+import { normalizePenpotProjectState, type PenpotProjectState } from "@/utils/penpot-state.js";
 import logger from "@/utils/logger.js";
 
 const bridgeAxios = axios.create({
@@ -111,6 +112,7 @@ export async function bridgeStreamPipeline(
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let parseErrorCount = 0;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -126,9 +128,38 @@ export async function bridgeStreamPipeline(
           const event = JSON.parse(raw) as PhaseSSEEvent;
           onEvent(event);
           if (event.type === "stream_end") return;
-        } catch {
-          logger.debug("SSE parse error", raw);
+        } catch (err) {
+          parseErrorCount += 1;
+          logger.warn("SSE parse error", {
+            sessionId,
+            parseErrorCount,
+            error: err instanceof Error ? err.message : String(err),
+            raw: raw.slice(0, 400),
+          });
+          if (parseErrorCount <= 3) {
+            onEvent({
+              type: "error",
+              message: "Received malformed bridge event. Some live updates may be missing.",
+            });
+          }
         }
+      }
+    }
+  }
+
+  const trailing = buffer.trim();
+  if (trailing.startsWith("data: ")) {
+    const raw = trailing.slice(6).trim();
+    if (raw) {
+      try {
+        const event = JSON.parse(raw) as PhaseSSEEvent;
+        onEvent(event);
+      } catch (err) {
+        logger.warn("Trailing SSE parse error", {
+          sessionId,
+          error: err instanceof Error ? err.message : String(err),
+          raw: raw.slice(0, 400),
+        });
       }
     }
   }
@@ -145,4 +176,24 @@ export async function bridgeSendPipelineInput(sessionId: string, answer: string)
   if (!res.data.success) {
     throw new BridgeError(res.data.error ?? "Failed to send pipeline input");
   }
+}
+
+export async function bridgeGetPenpotProjectState(projectDir: string): Promise<PenpotProjectState | null> {
+  const res = await bridgeAxios.get<PenpotProjectStateResponse>("/penpot/project-state", {
+    params: { project_dir: projectDir },
+  });
+
+  if (res.data.status === "error") {
+    throw new BridgeError(res.data.message ?? "Failed to load Penpot project state");
+  }
+
+  if (!res.data.project_state || !res.data.has_design) {
+    return null;
+  }
+
+  return normalizePenpotProjectState(
+    res.data.project_state as Record<string, unknown>,
+    projectDir,
+    "bridge:/penpot/project-state",
+  );
 }

@@ -6,6 +6,7 @@
 import { getApiClient } from "@/api/client.js";
 import { useStore } from "@/store/index.js";
 import { debugLog } from "@/utils/logger.js";
+import axios from "axios";
 
 interface ModelItem {
   id?: string;
@@ -29,6 +30,33 @@ function normalizeModel(model: ModelItem) {
     tier,
     remainingPct: model.remaining_pct,
   };
+}
+
+/**
+ * Backward-compatible utility used by tests and scripts.
+ * Fetches the public OpenRouter model catalog directly.
+ */
+export async function fetchModels(): Promise<Array<{ id: string; name: string; context_length?: number }>> {
+  const client = (axios as unknown as { default?: { get?: typeof axios.get }; get?: typeof axios.get });
+  const get = client.get ?? client.default?.get;
+  if (!get) return [];
+
+  const res = await get<{ data?: Array<{ id: string; name: string; context_length?: number }>; models?: Array<{ id: string; name: string; context_length?: number }> }>(
+    "https://openrouter.ai/api/v1/models",
+    {
+      headers: { Accept: "application/json" },
+      timeout: 20_000,
+    },
+  );
+
+  const payload = res.data as {
+    data?: Array<{ id: string; name: string; context_length?: number }>;
+    models?: Array<{ id: string; name: string; context_length?: number }>;
+  };
+
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.models)) return payload.models;
+  return [];
 }
 
 export async function cmdListModels(): Promise<void> {

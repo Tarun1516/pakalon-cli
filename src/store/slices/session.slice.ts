@@ -24,6 +24,8 @@ export interface SessionState {
   addMessage: (msg: ChatMessage) => void;
   updateLastMessage: (patch: Partial<ChatMessage> | string) => void;
   appendToLastMessage: (chunk: string) => void;
+  updateMessageById: (id: string, patch: Partial<ChatMessage> | string) => void;
+  appendToMessage: (id: string, chunk: string) => void;
   finalizeStreamingMessage: () => void;
   clearMessages: () => void;
   clearSession: () => void;
@@ -72,6 +74,26 @@ export const createSessionSlice: StateCreator<
       }
       return { messages: msgs };
     }),
+
+  updateMessageById: (id: string, patch: Partial<ChatMessage> | string) =>
+    set((state: SessionState) => ({
+      messages: state.messages.map((message) => {
+        if (message.id !== id) return message;
+        if (typeof patch === "string") {
+          return { ...message, content: patch };
+        }
+        return { ...message, ...patch };
+      }),
+    })),
+
+  appendToMessage: (id: string, chunk: string) =>
+    set((state: SessionState) => ({
+      messages: state.messages.map((message) =>
+        message.id === id && message.isStreaming
+          ? { ...message, content: message.content + chunk }
+          : message
+      ),
+    })),
 
   finalizeStreamingMessage: () =>
     set((state: SessionState) => ({

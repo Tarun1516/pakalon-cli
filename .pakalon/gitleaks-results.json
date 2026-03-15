@@ -1,0 +1,23 @@
+[
+ {
+  "RuleID": "generic-api-key",
+  "Description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+  "StartLine": 350,
+  "EndLine": 350,
+  "StartColumn": 39,
+  "EndColumn": 60,
+  "Match": "key, expiry_seconds=7 ",
+  "Secret": "expiry_seconds=7",
+  "File": "python/tools/storage.py",
+  "SymlinkFile": "",
+  "Commit": "52b8a9e521c3229bb983be724ea0ae579b58375f",
+  "Link": "https://github.com/Tarun1516/pakalon-cli/blob/52b8a9e521c3229bb983be724ea0ae579b58375f/python/tools/storage.py#L350",
+  "Entropy": 3.75,
+  "Author": "Tarun",
+  "Email": "112602801+Tarun1516@users.noreply.github.com",
+  "Date": "2026-03-03T03:27:04Z",
+  "Message": "Add all project files",
+  "Tags": [],
+  "Fingerprint": "52b8a9e521c3229bb983be724ea0ae579b58375f:python/tools/storage.py:generic-api-key:350"
+ }
+]

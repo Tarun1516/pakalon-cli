@@ -15,7 +15,7 @@ import {
   BlockedByExit2Error,
   type SubprocessResult,
   type ParsedResult,
-} from "./exit-code";
+} from "../exit-code";
 
 describe("parseExitCode", () => {
   // ---------------------------------------------------------------------

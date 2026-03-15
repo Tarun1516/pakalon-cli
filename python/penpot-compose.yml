@@ -1,0 +1,105 @@
+name: pakalon-penpot
+
+services:
+  penpot-frontend:
+    image: penpotapp/frontend:2.11.1
+    container_name: pakalon-penpot-frontend
+    restart: unless-stopped
+    ports:
+      - "3449:8080"
+    depends_on:
+      penpot-backend:
+        condition: service_started
+      penpot-exporter:
+        condition: service_started
+    environment:
+      PENPOT_FLAGS: disable-email-verification disable-secure-session-cookies
+      PENPOT_HTTP_SERVER_MAX_BODY_SIZE: 367001600
+      PENPOT_HTTP_SERVER_MAX_MULTIPART_BODY_SIZE: 367001600
+    volumes:
+      - penpot_assets:/opt/data/assets
+    networks:
+      - penpot
+
+  penpot-backend:
+    image: penpotapp/backend:2.11.1
+    container_name: pakalon-penpot-backend
+    restart: unless-stopped
+    depends_on:
+      penpot-postgres:
+        condition: service_healthy
+      penpot-valkey:
+        condition: service_healthy
+    environment:
+      PENPOT_FLAGS: disable-email-verification disable-secure-session-cookies
+      PENPOT_PUBLIC_URI: http://localhost:3449
+      PENPOT_SECRET_KEY: pakalon-local-penpot-secret-key
+      PENPOT_DATABASE_URI: postgresql://penpot-postgres/penpot
+      PENPOT_DATABASE_USERNAME: penpot
+      PENPOT_DATABASE_PASSWORD: penpot
+      PENPOT_REDIS_URI: redis://penpot-valkey/0
+      PENPOT_OBJECTS_STORAGE_BACKEND: fs
+      PENPOT_OBJECTS_STORAGE_FS_DIRECTORY: /opt/data/assets
+      PENPOT_TELEMETRY_ENABLED: "false"
+    volumes:
+      - penpot_assets:/opt/data/assets
+    networks:
+      - penpot
+
+  penpot-exporter:
+    image: penpotapp/exporter:2.11.1
+    container_name: pakalon-penpot-exporter
+    restart: unless-stopped
+    depends_on:
+      penpot-valkey:
+        condition: service_healthy
+    environment:
+      PENPOT_SECRET_KEY: pakalon-local-penpot-secret-key
+      PENPOT_PUBLIC_URI: http://penpot-frontend:8080
+      PENPOT_REDIS_URI: redis://penpot-valkey/0
+    networks:
+      - penpot
+
+  penpot-postgres:
+    image: postgres:15
+    container_name: pakalon-penpot-postgres
+    restart: unless-stopped
+    stop_signal: SIGINT
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U penpot"]
+      interval: 2s
+      timeout: 10s
+      retries: 10
+      start_period: 5s
+    environment:
+      POSTGRES_INITDB_ARGS: --data-checksums
+      POSTGRES_DB: penpot
+      POSTGRES_USER: penpot
+      POSTGRES_PASSWORD: penpot
+    volumes:
+      - penpot_postgres_v15:/var/lib/postgresql/data
+    networks:
+      - penpot
+
+  penpot-valkey:
+    image: valkey/valkey:8.1
+    container_name: pakalon-penpot-valkey
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli ping | grep PONG"]
+      interval: 1s
+      timeout: 3s
+      retries: 10
+      start_period: 3s
+    environment:
+      VALKEY_EXTRA_FLAGS: --maxmemory 128mb --maxmemory-policy volatile-lfu
+    networks:
+      - penpot
+
+networks:
+  penpot:
+    name: pakalon-penpot-network
+
+volumes:
+  penpot_assets:
+  penpot_postgres_v15:

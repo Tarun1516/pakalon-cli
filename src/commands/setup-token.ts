@@ -5,6 +5,10 @@ import { saveCredentials, clearCredentials, getPlanFromToken } from "@/auth/stor
 import { createApiClient } from "@/api/client.js";
 import { debugLog } from "@/utils/logger.js";
 
+export function generateDeviceCode(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
 function promptToken(): Promise<string> {
   return new Promise((resolve) => {
     process.stdout.write("  Enter your Pakalon JWT token: ");

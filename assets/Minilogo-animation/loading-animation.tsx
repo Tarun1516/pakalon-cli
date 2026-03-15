@@ -2619,8 +2619,6 @@ export const LoadingAnimation: React.FC<LoadingAnimationProps> = ({
 }) => {
   const [frameIndex, setFrameIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(autoPlay);
-  const frameElapsedRef = useRef(0);
-  const lastTimestampRef = useRef(Date.now());
 
   // Select color theme based on background
   const theme = useMemo(() => hasDarkBackground ? THEME_DARK : THEME_LIGHT, [hasDarkBackground]);
@@ -2631,8 +2629,6 @@ export const LoadingAnimation: React.FC<LoadingAnimationProps> = ({
   const pause = useCallback(() => setIsPlaying(false), []);
   const restart = useCallback(() => {
     setFrameIndex(0);
-    frameElapsedRef.current = 0;
-    lastTimestampRef.current = Date.now();
     setIsPlaying(true);
   }, []);
 
@@ -2645,32 +2641,25 @@ export const LoadingAnimation: React.FC<LoadingAnimationProps> = ({
   useEffect(() => {
     if (!isPlaying || FRAMES.length <= 1) return;
 
-    const interval = setInterval(() => {
-      const now = Date.now();
-      const delta = now - lastTimestampRef.current;
-      lastTimestampRef.current = now;
-      frameElapsedRef.current += delta;
-
-      const currentFrame = FRAMES[frameIndex];
-      if (frameElapsedRef.current >= currentFrame.duration) {
-        frameElapsedRef.current = 0;
-        const nextIndex = frameIndex + 1;
-        if (nextIndex >= FRAMES.length) {
-          if (loop) {
-            setFrameIndex(0);
-          } else {
-            setIsPlaying(false);
-          }
+    const currentFrame = FRAMES[frameIndex] ?? FRAMES[0]!;
+    const nextDelayMs = Math.max(40, Math.round(currentFrame.duration));
+    const timer = setTimeout(() => {
+      const nextIndex = frameIndex + 1;
+      if (nextIndex >= FRAMES.length) {
+        if (loop) {
+          setFrameIndex(0);
         } else {
-          setFrameIndex(nextIndex);
+          setIsPlaying(false);
         }
+      } else {
+        setFrameIndex(nextIndex);
       }
-    }, 16);
+    }, nextDelayMs);
 
-    return () => clearInterval(interval);
+    return () => clearTimeout(timer);
   }, [isPlaying, frameIndex, loop]);
 
-  const frame = FRAMES[frameIndex];
+  const frame = FRAMES[frameIndex] ?? FRAMES[0]!;
 
   return (
     <Box flexDirection="column">

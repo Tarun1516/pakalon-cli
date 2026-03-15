@@ -113,13 +113,13 @@ process.exit(2);`
     const command = `"${process.execPath}" "${scriptPath}"`;
 
     // Simulate how hooks would use parseExitCode with throwOnExit2
-    const result = parseExitCode(
-      { stdout: "", stderr: "exit 2", exitCode: 2 },
-      false,
-      true
-    );
-
-    expect(result).toBeInstanceOf(BlockedByExit2Error);
+    expect(() =>
+      parseExitCode(
+        { stdout: "", stderr: "exit 2", exitCode: 2 },
+        false,
+        true,
+      ),
+    ).toThrow(BlockedByExit2Error);
   });
 });
 

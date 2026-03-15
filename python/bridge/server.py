@@ -821,7 +821,7 @@ async def pipeline_stream(
 
                     if not retry_findings:
                         break  # No issues found, continue to Phase 5
-774#
+
                     # Run Phase 3 with retry_patch_plan
                     send_sse({
                         "type": "text_delta",
@@ -837,13 +837,13 @@ async def pipeline_stream(
                         context_budget=_context_budget,
                         retry_patch_plan={"findings": retry_findings, "retry_count": retry_count + 1},
                     )
-790#
+
                     retry_count += 1
                     send_sse({
                         "type": "text_delta",
                         "content": f"\n✅ Phase 3 retry {retry_count} complete. Re-running Phase 4 to verify...\n"
                     })
-796#
+
                 # After all retries (or no retries needed), continue to Phase 5
                 send_sse({"type": "text_delta", "content": "\n🚀 Auto-starting Phase 5: CI/CD...\n"})
                 await run_single_phase(5)
@@ -1047,6 +1047,10 @@ class PenpotConfigureRequest(BaseModel):
     api_url: str | None = None
     api_token: str | None = None
     project_id: str | None = None
+
+
+class PenpotProjectStateRequest(BaseModel):
+    project_dir: str = "."
 
 
 # In-memory sync client (per-bridge-instance)
@@ -1415,6 +1419,75 @@ async def penpot_export():
     except Exception as exc:
         log.error(f"Penpot export failed: {exc}")
         return {"status": "error", "message": str(exc)}
+
+
+@app.post("/penpot/start")
+async def penpot_start():
+    """Start the local Penpot Docker stack."""
+    import sys as _sys
+    import pathlib as _pl
+    _root = str(_pl.Path(__file__).resolve().parents[1])
+    if _root not in _sys.path:
+        _sys.path.insert(0, _root)
+
+    try:
+        from tools.penpot import PenpotTool  # type: ignore
+
+        tool = PenpotTool()
+        started = tool.start_container()
+        return {
+            "status": "started" if started else "error",
+            "message": "Penpot started" if started else "Penpot failed to start",
+        }
+    except Exception as exc:
+        log.error(f"Penpot start failed: {exc}")
+        return {"status": "error", "message": str(exc)}
+
+
+@app.post("/penpot/stop")
+async def penpot_stop():
+    """Stop the local Penpot Docker stack."""
+    import sys as _sys
+    import pathlib as _pl
+    _root = str(_pl.Path(__file__).resolve().parents[1])
+    if _root not in _sys.path:
+        _sys.path.insert(0, _root)
+
+    try:
+        from tools.penpot import PenpotTool  # type: ignore
+
+        tool = PenpotTool()
+        stopped = tool.stop_container()
+        return {
+            "status": "stopped" if stopped else "error",
+            "message": "Penpot stopped" if stopped else "Penpot failed to stop",
+        }
+    except Exception as exc:
+        log.error(f"Penpot stop failed: {exc}")
+        return {"status": "error", "message": str(exc)}
+
+
+@app.get("/penpot/project-state")
+async def penpot_project_state(project_dir: str = "."):
+    """Return the canonical project-scoped Penpot metadata for the given project directory."""
+    import sys as _sys
+    import pathlib as _pl
+    _root = str(_pl.Path(__file__).resolve().parents[1])
+    if _root not in _sys.path:
+        _sys.path.insert(0, _root)
+
+    try:
+        from agents.shared.penpot_metadata import read_penpot_metadata  # type: ignore
+
+        state = read_penpot_metadata(project_dir)
+        return {
+            "status": "ok",
+            "project_state": state,
+            "has_design": bool(state and state.get("file_id")),
+        }
+    except Exception as exc:
+        log.error(f"Penpot project-state failed: {exc}")
+        return {"status": "error", "message": str(exc), "project_state": None, "has_design": False}
 
 
 # ---------------------------------------------------------------------------
@@ -1944,6 +2017,8 @@ class OrchestrateTool(BaseModel):
 class OrchestrateRequest(BaseModel):
     tools: list[OrchestrateTool]
     parallel: bool = False
+    allow_mutation: bool = False
+    project_dir: str | None = None
     model_id: str | None = None
     context: str | None = None
 
@@ -1955,48 +2030,234 @@ async def agent_orchestrate(req: OrchestrateRequest):
     Accepts a list of tool-call descriptors and executes them in order (or in parallel).
     Returns results for each tool call.
     """
-    import importlib
-    import inspect
+    import fnmatch
+    import re
+    import subprocess
+    from pathlib import Path
 
-    results = []
+    root = Path(req.project_dir or os.getcwd()).resolve()
 
-    async def run_one(tool_call: OrchestrateTool) -> dict:
-        tool_name = tool_call.tool_name
-        params = tool_call.params
+    def _is_within_root(candidate: Path) -> bool:
         try:
-            # Try to find in bridge tools module first
-            bridge_tools = None
-            try:
-                bridge_tools = importlib.import_module("bridge.tools")
-            except ImportError:
-                pass
+            return os.path.commonpath([str(root), str(candidate)]) == str(root)
+        except Exception:
+            return False
 
-            if bridge_tools and hasattr(bridge_tools, tool_name):
-                fn = getattr(bridge_tools, tool_name)
-                if inspect.iscoroutinefunction(fn):
-                    result = await fn(**params)
-                else:
-                    result = await asyncio.to_thread(fn, **params)
-                return {"tool": tool_name, "success": True, "result": result}
-            else:
-                return {"tool": tool_name, "success": False, "error": f"Tool '{tool_name}' not found"}
+    def _resolve_path(value: str | None, default_relative: str = ".") -> Path:
+        raw = value or default_relative
+        candidate = Path(raw)
+        resolved = candidate.resolve() if candidate.is_absolute() else (root / candidate).resolve()
+        if not _is_within_root(resolved):
+            raise ValueError(f"Path escapes project root: {resolved}")
+        return resolved
+
+    def _read_file(params: dict[str, Any]) -> dict[str, Any]:
+        file_path = params.get("file_path") or params.get("filePath")
+        if not file_path:
+            raise ValueError("read_file requires file_path")
+        max_bytes = int(params.get("max_bytes") or params.get("maxBytes") or 32768)
+        resolved = _resolve_path(str(file_path))
+        if not resolved.exists() or not resolved.is_file():
+            raise FileNotFoundError(f"File not found: {resolved}")
+        content = resolved.read_text(encoding="utf-8", errors="ignore")
+        return {
+            "path": str(resolved),
+            "content": content[:max_bytes],
+            "truncated": len(content) > max_bytes,
+        }
+
+    def _list_dir(params: dict[str, Any]) -> dict[str, Any]:
+        dir_path = params.get("dir_path") or params.get("dirPath") or "."
+        recursive = bool(params.get("recursive", False))
+        max_entries = int(params.get("max_entries") or params.get("maxEntries") or 500)
+        resolved = _resolve_path(str(dir_path))
+        if not resolved.exists() or not resolved.is_dir():
+            raise NotADirectoryError(f"Directory not found: {resolved}")
+
+        entries: list[str] = []
+        if recursive:
+            for current, dirs, files in os.walk(resolved):
+                rel_current = Path(current).relative_to(resolved)
+                for d in dirs:
+                    rel = (rel_current / d).as_posix()
+                    entries.append(f"{rel}/")
+                    if len(entries) >= max_entries:
+                        return {"entries": entries, "truncated": True}
+                for f in files:
+                    rel = (rel_current / f).as_posix()
+                    entries.append(rel)
+                    if len(entries) >= max_entries:
+                        return {"entries": entries, "truncated": True}
+            return {"entries": entries, "truncated": False}
+
+        for child in sorted(resolved.iterdir(), key=lambda p: p.name.lower()):
+            entries.append(f"{child.name}/" if child.is_dir() else child.name)
+            if len(entries) >= max_entries:
+                return {"entries": entries, "truncated": True}
+        return {"entries": entries, "truncated": False}
+
+    def _glob_find(params: dict[str, Any]) -> dict[str, Any]:
+        pattern = str(params.get("pattern") or "**/*")
+        cwd = _resolve_path(str(params.get("cwd") or "."))
+        max_results = int(params.get("max_results") or params.get("maxResults") or 200)
+        exclude_patterns = params.get("exclude_patterns") or params.get("excludePatterns") or [
+            "node_modules/**",
+            ".git/**",
+            "dist/**",
+            ".next/**",
+            "venv/**",
+            ".venv/**",
+        ]
+        if not isinstance(exclude_patterns, list):
+            exclude_patterns = []
+
+        files: list[str] = []
+        for match in cwd.glob(pattern):
+            if len(files) >= max_results:
+                break
+            rel = match.relative_to(cwd).as_posix()
+            if any(fnmatch.fnmatch(rel, ep) for ep in exclude_patterns):
+                continue
+            files.append(rel + ("/" if match.is_dir() else ""))
+
+        return {
+            "files": files,
+            "count": len(files),
+            "truncated": len(files) >= max_results,
+        }
+
+    def _grep_search(params: dict[str, Any]) -> dict[str, Any]:
+        pattern = params.get("pattern")
+        if not pattern:
+            raise ValueError("grep_search requires pattern")
+
+        cwd = _resolve_path(str(params.get("cwd") or "."))
+        file_pattern = str(params.get("file_pattern") or params.get("filePattern") or "**/*")
+        is_regex = bool(params.get("is_regex") or params.get("isRegex") or False)
+        case_sensitive = bool(params.get("case_sensitive") or params.get("caseSensitive") or False)
+        max_results = int(params.get("max_results") or params.get("maxResults") or 50)
+
+        flags = 0 if case_sensitive else re.IGNORECASE
+        compiled = re.compile(str(pattern) if is_regex else re.escape(str(pattern)), flags)
+
+        matches: list[dict[str, Any]] = []
+        skip_ext = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg", ".ico", ".woff", ".woff2", ".ttf", ".eot", ".mp4", ".webm", ".zip", ".tar", ".gz", ".bin", ".exe", ".dll"}
+
+        for file_path in cwd.glob(file_pattern):
+            if len(matches) >= max_results:
+                break
+            if not file_path.is_file() or file_path.suffix.lower() in skip_ext:
+                continue
+            try:
+                content = file_path.read_text(encoding="utf-8", errors="ignore")
+            except Exception:
+                continue
+            rel = file_path.relative_to(cwd).as_posix()
+            for line_index, line in enumerate(content.splitlines()):
+                if compiled.search(line):
+                    matches.append(
+                        {
+                            "file": rel,
+                            "line": line_index + 1,
+                            "text": line.strip()[:200],
+                        }
+                    )
+                    if len(matches) >= max_results:
+                        break
+
+        return {
+            "matches": matches,
+            "count": len(matches),
+            "truncated": len(matches) >= max_results,
+        }
+
+    write_pattern = re.compile(
+        r"\b(rm|rmdir|mv|cp|mkdir|touch|chmod|chown|install|npm|yarn|pnpm|pip|apt|brew)\b|>>?|\btee\b|curl\s.*-o\b|\bwget\b",
+        re.IGNORECASE,
+    )
+
+    def _run_command(params: dict[str, Any]) -> dict[str, Any]:
+        command = params.get("command")
+        if not command:
+            raise ValueError("run_command requires command")
+        command = str(command)
+        cwd = _resolve_path(str(params.get("cwd") or "."))
+        timeout_ms = int(params.get("timeout_ms") or params.get("timeoutMs") or 15000)
+
+        if not req.allow_mutation and write_pattern.search(command):
+            raise PermissionError("run_command blocked in read-only orchestration mode")
+
+        completed = subprocess.run(
+            command,
+            cwd=str(cwd),
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=max(1, timeout_ms) / 1000,
+        )
+
+        stdout = (completed.stdout or "")[:16384]
+        stderr = (completed.stderr or "")[:8192]
+        return {
+            "exit_code": completed.returncode,
+            "stdout": stdout,
+            "stderr": stderr,
+            "success": completed.returncode == 0,
+        }
+
+    handlers = {
+        "read_file": _read_file,
+        "list_dir": _list_dir,
+        "glob_find": _glob_find,
+        "grep_search": _grep_search,
+        "run_command": _run_command,
+    }
+
+    results: list[dict[str, Any]] = []
+
+    async def run_one(tool_call: OrchestrateTool) -> dict[str, Any]:
+        tool_name = str(tool_call.tool_name)
+        params = tool_call.params or {}
+        handler = handlers.get(tool_name)
+        if handler is None:
+            return {
+                "tool": tool_name,
+                "success": False,
+                "error": f"Unknown orchestrate tool: {tool_name}",
+            }
+
+        try:
+            result = await asyncio.to_thread(handler, params)
+            return {
+                "tool": tool_name,
+                "success": True,
+                "result": result,
+            }
         except Exception as exc:
-            return {"tool": tool_name, "success": False, "error": str(exc)}
+            return {
+                "tool": tool_name,
+                "success": False,
+                "error": str(exc),
+            }
 
     if req.parallel:
-        tasks = [run_one(t) for t in req.tools]
+        tasks = [run_one(call) for call in req.tools]
         results = list(await asyncio.gather(*tasks))
     else:
         for tool_call in req.tools:
-            result = await run_one(tool_call)
-            results.append(result)
+            results.append(await run_one(tool_call))
 
-    succeeded = sum(1 for r in results if r.get("success"))
+    succeeded = sum(1 for item in results if item.get("success"))
+    failed = len(results) - succeeded
+
     return {
         "success": True,
         "results": results,
         "succeeded": succeeded,
-        "failed": len(results) - succeeded,
+        "failed": failed,
+        "parallel": req.parallel,
+        "allow_mutation": req.allow_mutation,
+        "project_dir": str(root),
     }
 
 

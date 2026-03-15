@@ -2,8 +2,8 @@
  * MessageList — renders the conversation history in Ink.
  * T-CLI-11: Inline image rendering via term-img for image paths detected in messages.
  */
-import React, { useState, useEffect } from "react";
-import { Box, Text } from "ink";
+import React, { useEffect, useMemo, useState } from "react";
+import { Box, Text, Static } from "ink";
 import type { ChatMessage } from "@/store/slices/session.slice.js";
 import { PAKALON_GOLD, TEXT_PRIMARY } from "@/constants/colors.js";
 import { getShellWidth } from "@/utils/shell-layout.js";
@@ -59,12 +59,25 @@ const InlineImage: React.FC<{ filePath: string }> = ({ filePath }) => {
 interface MessageListProps {
   messages: ChatMessage[];
   maxVisible?: number;
+  assistantBusy?: boolean;
 }
 
-const MessageItem: React.FC<{ msg: ChatMessage }> = ({ msg }) => {
+const AssistantBadge: React.FC<{ animate?: boolean }> = ({ animate = false }) => {
+  return (
+    <Box marginRight={1} minWidth={3}>
+      <Text color={PAKALON_ASSISTANT_COLOR} bold={animate}>{animate ? "●" : "○"}</Text>
+    </Box>
+  );
+};
+
+const MessageItemBase: React.FC<{
+  msg: ChatMessage;
+  animateAssistant?: boolean;
+}> = ({ msg, animateAssistant = false }) => {
   const isUser = msg.role === "user";
   const isSystem = msg.role === "system";
   const isTool = msg.role === "tool";
+  const isAssistant = !isUser && !isSystem && !isTool;
 
   if (isSystem) {
     return (
@@ -86,20 +99,23 @@ const MessageItem: React.FC<{ msg: ChatMessage }> = ({ msg }) => {
 
   return (
     <Box flexDirection="column" marginY={0}>
-      <Box gap={1}>
-        <Text
-          bold
-          color={isUser ? TEXT_PRIMARY : PAKALON_ASSISTANT_COLOR}
-        >
-          {isUser ? "you" : "pakalon"}
-        </Text>
+      <Box gap={1} alignItems="flex-start">
+        {isUser ? (
+          <Text
+            bold
+            color={TEXT_PRIMARY}
+          >
+            you
+          </Text>
+        ) : (
+          <AssistantBadge animate={animateAssistant} />
+        )}
         <Text dimColor>
           {msg.createdAt.toLocaleTimeString("en-US", {
             hour: "2-digit",
             minute: "2-digit",
           })}
         </Text>
-        {msg.isStreaming && <Text color={PAKALON_ASSISTANT_COLOR}>●</Text>}
       </Box>
       <Box paddingLeft={2} flexDirection="column">
         <Text wrap="wrap">{msg.content}</Text>
@@ -112,29 +128,78 @@ const MessageItem: React.FC<{ msg: ChatMessage }> = ({ msg }) => {
   );
 };
 
-const MessageList: React.FC<MessageListProps> = ({ messages, maxVisible = 20 }) => {
-  const visible = messages.slice(-maxVisible);
-  const shellWidth = getShellWidth(process.stdout.columns ?? 80);
+const MessageItem = React.memo(MessageItemBase);
 
-  if (visible.length === 0) {
-    return (
-      <Box width="100%" justifyContent="center" flexGrow={1}>
-        <Box flexGrow={1} width={shellWidth} />
-      </Box>
-    );
-  }
+const BusyRow: React.FC = () => (
+  <Box flexDirection="column" marginY={0}>
+    <Box gap={1} alignItems="flex-start">
+      <AssistantBadge animate />
+      <Text dimColor>
+        {new Date().toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+        })}
+      </Text>
+    </Box>
+    <Box paddingLeft={2}>
+      <Text color={PAKALON_ASSISTANT_COLOR}>Agent running…</Text>
+    </Box>
+  </Box>
+);
+
+const MessageList: React.FC<MessageListProps> = ({ messages, maxVisible = 20, assistantBusy = false }) => {
+  const shellWidth = getShellWidth(process.stdout.columns ?? 80);
+  const activeAssistantMessageId = useMemo(() => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (!message) continue;
+      if (message.role !== "user" && message.role !== "system" && message.role !== "tool") {
+        return message.id;
+      }
+    }
+    return null;
+  }, [messages]);
+
+  const lastUserIndex = useMemo(() => {
+    return messages.map((m) => m.role).lastIndexOf("user");
+  }, [messages]);
+
+  const staticMessages = useMemo(() => {
+     if (lastUserIndex <= 0) return [];
+     return messages.slice(0, lastUserIndex);
+  }, [messages, lastUserIndex]);
+
+  const activeMessages = useMemo(() => {
+    if (lastUserIndex < 0) return messages;
+    return messages.slice(lastUserIndex);
+  }, [messages, lastUserIndex]);
+
+  const hasStreamingAssistant = useMemo(
+    () => activeMessages.some((message) => message.role !== "user" && message.role !== "system" && message.role !== "tool" && message.isStreaming),
+    [activeMessages]
+  );
 
   return (
-    <Box width="100%" justifyContent="center" flexGrow={1}>
-      <Box flexDirection="column" flexGrow={1} width={shellWidth}>
-        {messages.length > maxVisible && (
-          <Text dimColor>
-            ↑ {messages.length - maxVisible} earlier messages hidden
-          </Text>
+    <Box width="100%" justifyContent="center" flexGrow={1} flexDirection="column">
+      <Box display="none">
+        {/* We keep this to satisfy TypeScript and Ink static imports, but import Static at file top instead */}
+      </Box>
+      <Static items={staticMessages}>
+        {(msg: ChatMessage) => (
+          <Box key={msg.id} width={shellWidth} flexDirection="column" paddingBottom={1}>
+            <MessageItem msg={msg} />
+          </Box>
         )}
-        {visible.map((msg) => (
-          <MessageItem key={msg.id} msg={msg} />
+      </Static>
+      <Box flexDirection="column" flexGrow={1} width={shellWidth}>
+        {activeMessages.map((msg) => (
+          <MessageItem
+            key={msg.id}
+            msg={msg}
+            animateAssistant={msg.id === activeAssistantMessageId && assistantBusy}
+          />
         ))}
+        {assistantBusy && !hasStreamingAssistant && <BusyRow />}
       </Box>
     </Box>
   );

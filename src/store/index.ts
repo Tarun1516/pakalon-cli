@@ -130,6 +130,8 @@ export const useSession = () =>
     addMessage: s.addMessage,
     updateLastMessage: s.updateLastMessage,
     appendToLastMessage: s.appendToLastMessage,
+    updateMessageById: s.updateMessageById,
+    appendToMessage: s.appendToMessage,
     finalizeStreamingMessage: s.finalizeStreamingMessage,
     clearMessages: s.clearMessages,
     clearSession: s.clearSession,

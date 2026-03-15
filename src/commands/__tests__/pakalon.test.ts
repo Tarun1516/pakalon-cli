@@ -14,15 +14,18 @@ vi.mock("@/utils/logger.js", () => ({
 
 const mockStartBridge = vi.fn().mockResolvedValue(7432);
 const mockStopBridge = vi.fn().mockResolvedValue(undefined);
-const mockBridgeAgentRun = vi.fn().mockResolvedValue({ phase: 1, status: "complete", output: {} });
 
 vi.mock("@/bridge/manager.js", () => ({
   startBridge: mockStartBridge,
   stopBridge: mockStopBridge,
 }));
 
-vi.mock("@/bridge/client.js", () => ({
-  bridgeAgentRun: mockBridgeAgentRun,
+vi.mock("fs", () => ({
+  default: {
+    existsSync: vi.fn(() => false),
+    mkdirSync: vi.fn(),
+    writeFileSync: vi.fn(),
+  },
 }));
 
 // Prevent process.exit from killing test runner
@@ -57,24 +60,21 @@ describe("cmdPakalon", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockStartBridge.mockResolvedValue(7432);
-    mockBridgeAgentRun.mockResolvedValue({ phase: 1, status: "complete" });
   });
 
-  it("starts bridge and calls bridgeAgentRun with correct phase", async () => {
+  it("starts bridge and returns bridge configuration", async () => {
     const { cmdPakalon } = await import("../../commands/pakalon.js");
-    await cmdPakalon({ prompt: "Build a todo app", mode: "yolo", dir: "/tmp" });
+    const result = await cmdPakalon({ prompt: "Build a todo app", mode: "yolo", dir: "/tmp" });
     expect(mockStartBridge).toHaveBeenCalledTimes(1);
-    expect(mockBridgeAgentRun).toHaveBeenCalledWith(
-      expect.objectContaining({ phase: 1, prompt: "Build a todo app" }),
-    );
+    expect(result.bridgePort).toBe(7432);
+    expect(result.projectDir).toBe("/tmp");
+    expect(result.bridgeMode.userPrompt).toBe("Build a todo app");
   });
 
   it("uses yolo mode when specified", async () => {
     const { cmdPakalon } = await import("../../commands/pakalon.js");
-    await cmdPakalon({ prompt: "test", mode: "yolo" });
-    expect(mockBridgeAgentRun).toHaveBeenCalledWith(
-      expect.objectContaining({ mode: "yolo" }),
-    );
+    const result = await cmdPakalon({ prompt: "test", mode: "yolo" });
+    expect(result.bridgeMode.isYolo).toBe(true);
   });
 
   it("exits with code 1 when bridge fails to start", async () => {
@@ -84,18 +84,9 @@ describe("cmdPakalon", () => {
     expect(mockExit).toHaveBeenCalledWith(1);
   });
 
-  it("exits with code 1 when bridgeAgentRun throws", async () => {
-    mockBridgeAgentRun.mockRejectedValueOnce(new Error("Phase 1 timeout"));
-    const { cmdPakalon } = await import("../../commands/pakalon.js");
-    await cmdPakalon({ prompt: "test" });
-    expect(mockExit).toHaveBeenCalledWith(1);
-  });
-
   it("uses process.cwd() as default dir", async () => {
     const { cmdPakalon } = await import("../../commands/pakalon.js");
-    await cmdPakalon({ prompt: "test" });
-    expect(mockBridgeAgentRun).toHaveBeenCalledWith(
-      expect.objectContaining({ projectDir: process.cwd() }),
-    );
+    const result = await cmdPakalon({ prompt: "test" });
+    expect(result.projectDir).toBe(process.cwd());
   });
 });
